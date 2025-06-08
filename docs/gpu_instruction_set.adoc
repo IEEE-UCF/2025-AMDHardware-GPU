@@ -4,14 +4,14 @@
 
 == Overview
 
-Total instruction size: *72 bits (9 bytes)*
+Total instruction size: *80 bits (10 bytes)*
 
 == Bit Layout
 
-[cols="1,1,1,1,4,16", options="header"]
+[cols="3,3,3,3,4,5,16", options="header"]
 |===
-| Bit 1 | Bit 2 | Bit 3 | Bit 4 | Bits 5-8 | Bits 9-72
-| SV   | WRT   | RD    | VAL   | OPCODE   | DATA (64 bits)
+| Bit 1 | Bit 2 | Bit 3 | Bit 4 | Bits 5-12  | Bits 13-16 | Bits 17-80
+| SV    | WRT   | RD    | VAL   | OPCODE     | DEST       | DATA (64 bits)
 |===
 
 == Bit Field Definitions
@@ -37,8 +37,15 @@ Only valid if bit 3 (RD) = 1
 * `0` = Read 1 value from memory
 * `1` = Read 2 values from memory
 
-=== Bits 5-8: Instruction Opcode
+=== Bits 5-12: Instruction Opcode
 4 bits providing *16 possible instructions* (0000-1111)
+
+=== Bits 13-16: Destination Register
+4 bits providing the register to output the data computed, including write pointers
+[NOTE]
+====
+Only ignored when writing data to memory, of which bits 13-16 shall be nulled/0
+====
 
 == Data Field (64 bits)
 
@@ -48,37 +55,6 @@ The 64-bit data field contains **all data** needed for the instruction:
 * Immediate values  
 * Operands
 * Mixed data types as needed
-
-== Example Instructions
-
-=== Example 1: Scalar Add with Immediate Data
-
-[cols="1,1,1,1,4,16", options="header"]
-|===
-| S/V | WRT | RD | VAL | OPCODE | DATA
-| 0   | 0   | 0  | 0   | 0001   | 0x123456789ABCDEF0
-|===
-
-*Description:* Scalar ADD operation using immediate operands, no memory operations
-
-=== Example 2: Vector Load with Two Memory Reads
-
-[cols="1,1,1,1,4,16", options="header"]
-|===
-| S/V | WRT | RD | VAL | OPCODE | DATA  
-| 1   | 1   | 1  | 1   | 0010   | 0xAABBCCDD \| 0xEEFF0011
-|===
-
-*Description:* Vector LOAD operation reading 2 values from memory, with write-back
-
-== Physical Memory Layout
-
-....
-Byte 0: [S/V][WRT][RD][VAL][OPCODE]
-        └─0─┘└─1─┘└2┘└3┘└──4-7──┘
-
-Bytes 1-8: 64-bit data field (all data for the instruction)
-....
 
 == Architecture Notes
 
