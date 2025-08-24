@@ -1,8 +1,8 @@
 module clock_divider #(
     parameter int DIVISOR = 4
 ) (
-    input  logic clk_in,
-    input  logic rst_n,
+    input logic clk_in,
+    input logic rst_n,
     output logic clk_out
 );
 

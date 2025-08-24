@@ -1,21 +1,21 @@
 module rasterizer #(
     parameter int CORD_WIDTH = 10
 )(
-    input  logic clk,
-    input  logic rst_n,
+    input logic clk,
+    input logic rst_n,
 
     // this is going to have alot of inline comments cause this is super duper complex LOL!!!
     // triangle vertices
-    input  logic                  i_start,
-    input  logic signed [CORD_WIDTH-1:0] i_v0_x, i_v0_y,
-    input  logic signed [CORD_WIDTH-1:0] i_v1_x, i_v1_y,
-    input  logic signed [CORD_WIDTH-1:0] i_v2_x, i_v2_y,
+    input logic i_start,
+    input logic signed [CORD_WIDTH-1:0] i_v0_x, i_v0_y,
+    input logic signed [CORD_WIDTH-1:0] i_v1_x, i_v1_y,
+    input logic signed [CORD_WIDTH-1:0] i_v2_x, i_v2_y,
 
     // stream of pixels that fall inside the triangle
-    output logic                  o_fragment_valid,
+    output logic o_fragment_valid,
     output logic signed [CORD_WIDTH-1:0] o_fragment_x,
     output logic signed [CORD_WIDTH-1:0] o_fragment_y,
-    output logic                  o_done
+    output logic o_done
 );
 
     // hold state while scanning

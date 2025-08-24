@@ -11,21 +11,21 @@ module interconnect #(
     // ill just write an inline comment per code block i guess?
 
     // masters (like the shader cores)
-    input  logic [NUM_MASTERS-1:0]                   i_master_req,
-    input  logic [NUM_MASTERS-1:0][ADDR_WIDTH-1:0]   i_master_addr,
-    input  logic [NUM_MASTERS-1:0][DATA_WIDTH-1:0]   i_master_wdata,
-    output logic [NUM_MASTERS-1:0][DATA_WIDTH-1:0]   o_master_rdata,
+    input logic [NUM_MASTERS-1:0] i_master_req,
+    input logic [NUM_MASTERS-1:0][ADDR_WIDTH-1:0] i_master_addr,
+    input logic [NUM_MASTERS-1:0][DATA_WIDTH-1:0] i_master_wdata,
+    output logic [NUM_MASTERS-1:0][DATA_WIDTH-1:0] o_master_rdata,
 
     // slaves (like the memory)
-    output logic [NUM_SLAVES-1:0]                    o_slave_req,
-    output logic [NUM_SLAVES-1:0][ADDR_WIDTH-1:0]    o_slave_addr,
-    output logic [NUM_SLAVES-1:0][DATA_WIDTH-1:0]    o_slave_wdata,
-    input  logic [NUM_SLAVES-1:0][DATA_WIDTH-1:0]    i_slave_rdata
+    output logic [NUM_SLAVES-1:0] o_slave_req,
+    output logic [NUM_SLAVES-1:0][ADDR_WIDTH-1:0] o_slave_addr,
+    output logic [NUM_SLAVES-1:0][DATA_WIDTH-1:0] o_slave_wdata,
+    input  logic [NUM_SLAVES-1:0][DATA_WIDTH-1:0] i_slave_rdata
 );
 
     logic [NUM_MASTERS-1:0] grants;
-    logic [ADDR_WIDTH-1:0]  granted_addr;
-    logic [DATA_WIDTH-1:0]  granted_wdata;
+    logic [ADDR_WIDTH-1:0] granted_addr;
+    logic [DATA_WIDTH-1:0] granted_wdata;
     logic [$clog2(NUM_MASTERS)-1:0] granted_index;
 
     // arbiter picks one master when theres multiple requests

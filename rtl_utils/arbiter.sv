@@ -1,10 +1,10 @@
 module arbiter #(
     parameter int NUM_REQUESTERS = 4
 ) (
-    input  logic                   clk,
-    input  logic                   rst_n,
+    input logic clk,
+    input logic rst_n,
 
-    input  logic [NUM_REQUESTERS-1:0] i_requests,
+    input logic [NUM_REQUESTERS-1:0] i_requests,
     output logic [NUM_REQUESTERS-1:0] o_grants
 );
 

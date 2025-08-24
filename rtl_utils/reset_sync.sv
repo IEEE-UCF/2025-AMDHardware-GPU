@@ -1,6 +1,6 @@
 module reset_sync (
-    input  logic clk,
-    input  logic arst_n,
+    input logic clk,
+    input logic arst_n,
     output logic srst_n
 );
     // double flip-flop to clean up reset release

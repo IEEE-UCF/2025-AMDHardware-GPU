@@ -1,19 +1,19 @@
 module framebuffer #(
-    parameter int SCREEN_WIDTH  = 640,
+    parameter int SCREEN_WIDTH = 640,
     parameter int SCREEN_HEIGHT = 480,
-    parameter int COLOR_WIDTH   = 32
+    parameter int COLOR_WIDTH = 32
 )(
-    input  logic clk,
-    input  logic rst_n,
+    input logic clk,
+    input logic rst_n,
     
-    input  logic                    i_pixel_we,
-    input  logic [9:0]              i_pixel_x,
-    input  logic [9:0]              i_pixel_y,
-    input  logic [COLOR_WIDTH-1:0]  i_pixel_color,
+    input logic i_pixel_we,
+    input logic [9:0] i_pixel_x,
+    input logic [9:0] i_pixel_y,
+    input logic [COLOR_WIDTH-1:0] i_pixel_color,
 
     output logic [$clog2(SCREEN_WIDTH*SCREEN_HEIGHT)-1:0] o_mem_addr,
-    output logic [COLOR_WIDTH-1:0]                       o_mem_wdata,
-    output logic                                         o_mem_we
+    output logic [COLOR_WIDTH-1:0] o_mem_wdata,
+    output logic o_mem_we
 );
     
     localparam int FB_DEPTH = SCREEN_WIDTH * SCREEN_HEIGHT;

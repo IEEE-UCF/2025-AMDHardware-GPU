@@ -1,19 +1,19 @@
 module gpu_register_file #(
     parameter int DATA_WIDTH = 32,
-    parameter int NUM_REGS   = 16,
+    parameter int NUM_REGS = 16,
     parameter int ADDR_WIDTH = $clog2(NUM_REGS)
 )(
-    input  logic clk,
-    input  logic rst_n,
+    input logic clk,
+    input logic rst_n,
     
-    input  logic                  i_wr_en,
-    input  logic [ADDR_WIDTH-1:0] i_wr_addr,
-    input  logic [DATA_WIDTH-1:0] i_wr_data,
+    input logic i_wr_en,
+    input logic [ADDR_WIDTH-1:0] i_wr_addr,
+    input logic [DATA_WIDTH-1:0] i_wr_data,
 
-    input  logic [ADDR_WIDTH-1:0] i_rd_addr_a,
+    input logic [ADDR_WIDTH-1:0] i_rd_addr_a,
     output logic [DATA_WIDTH-1:0] o_rd_data_a,
 
-    input  logic [ADDR_WIDTH-1:0] i_rd_addr_b,
+    input logic [ADDR_WIDTH-1:0] i_rd_addr_b,
     output logic [DATA_WIDTH-1:0] o_rd_data_b
 );
 

@@ -2,9 +2,9 @@ module alu #(
     parameter int DATA_WIDTH = 32,
     parameter int VECTOR_SIZE = 4
 )(
-    input  logic [VECTOR_SIZE-1:0][DATA_WIDTH-1:0] i_operand_a,
-    input  logic [VECTOR_SIZE-1:0][DATA_WIDTH-1:0] i_operand_b,
-    input  logic [4:0]                             i_opcode,
+    input logic [VECTOR_SIZE-1:0][DATA_WIDTH-1:0] i_operand_a,
+    input logic [VECTOR_SIZE-1:0][DATA_WIDTH-1:0] i_operand_b,
+    input logic [4:0] i_opcode,
     output logic [VECTOR_SIZE-1:0][DATA_WIDTH-1:0] o_result
 );
     
