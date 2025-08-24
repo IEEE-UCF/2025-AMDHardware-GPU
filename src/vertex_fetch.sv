@@ -1,6 +1,3 @@
-// vertex_fetch.sv
-// reads vertex data (position, color, etc.) from main memory.
-
 module vertex_fetch #(
     parameter int ATTR_WIDTH = 32, // width of one attribute (e.g., x)
     parameter int ATTRS_PER_VERTEX = 8, // e.g., pos(4), color(4)
