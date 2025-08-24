@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Project Version="7" Minor="35" Path="./build/gpu_project/gpu_project.xpr">
+  <DefaultLaunch Dir="$PRUNDIR"/>
+  <Configuration>
+    <Option Name="Id" Val="f1a2b3c4d5e6f7a8"/>
+    <Option Name="Part" Val="xc7z010clg400-1"/>
+    <Option Name="CompiledLibDir" Val="$PCACHEDIR/compile_simlib"/>
+    <Option Name="CompiledLibDirXSim" Val=""/>
+    <Option Name="CompiledLibDirModelSim" Val="$PCACHEDIR/compile_simlib/modelsim"/>
+    <Option Name="CompiledLibDirQuesta" Val="$PCACHEDIR/compile_simlib/questa"/>
+    <Option Name="CompiledLibDirIES" Val="$PCACHEDIR/compile_simlib/ies"/>
+    <Option Name="CompiledLibDirVCS" Val="$PCACHEDIR/compile_simlib/vcs"/>
+    <Option Name="CompiledLibDirRiviera" Val="$PCACHEDIR/compile_simlib/riviera"/>
+    <Option Name="CompiledLibDirActivehdl" Val="$PCACHEDIR/compile_simlib/activehdl"/>
+    <Option Name="SimulatorLanguage" Val="Mixed"/>
+    <Option Name="BoardPart" Val=""/>
+    <Option Name="ActiveSimSet" Val="sim_1"/>
+    <Option Name="DefaultLib" Val="xil_defaultlib"/>
+    <Option Name="EnableCoreContainer" Val="FALSE"/>
+    <Option Name="CreateRefXciForIP" Val="FALSE"/>
+    <Option Name="IPOutputRepo" Val="$PCACHEDIR/ip"/>
+    <Option Name="IPCachePermission" Val="read"/>
+    <Option Name="EnableDAARFlow" Val="FALSE"/>
+    <Option Name="WTXSimLaunchSim" Val="0"/>
+    <Option Name="WTModelSimLaunchSim" Val="0"/>
+    <Option Name="WTQuestaLaunchSim" Val="0"/>
+    <Option Name="WTIesLaunchSim" Val="0"/>
+    <Option Name="WTVcsLaunchSim" Val="0"/>
+    <Option Name="WTRivieraLaunchSim" Val="0"/>
+    <Option Name="WTActivehdlLaunchSim" Val="0"/>
+    <Option Name="WTXSimExportSim" Val="0"/>
+    <Option Name="WTModelSimExportSim" Val="0"/>
+    <Option Name="WTQuestaExportSim" Val="0"/>
+    <Option Name="WTIesExportSim" Val="0"/>
+    <Option Name="WTVcsExportSim" Val="0"/>
+    <Option Name="WTRivieraExportSim" Val="0"/>
+    <Option Name="WTActivehdlExportSim" Val="0"/>
+    <Option Name="GenerateIPUpgradeLog" Val="TRUE"/>
+    <Option Name="XSimRadix" Val="hex"/>
+    <Option Name="XSimTimeUnit" Val="ns"/>
+    <Option Name="XSimArrayDisplayLimit" Val="1024"/>
+    <Option Name="XSimTraceLimit" Val="65536"/>
+  </Configuration>
+  <FileSets>
+    <FileSet Name="sources_1" Type="DesignSrcs" RelSrcDir="$PSRCDIR/sources_1">
+      <Filter Type="Srcs"/>
+      <File Path="$PPRDIR/../rtl_utils/arbiter.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../rtl_utils/fifo.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/alu.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/attribute_interpolator.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/controller.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/fragment_shader.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/framebuffer.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/gpu_register_file.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/gpu_top.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/instruction_decoder.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/interconnect.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/rasterizer.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/shader_core.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/shader_loader.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/spi_to_parallel_bridge.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/texture_unit.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../src/vertex_fetch.sv">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <File Path="$PPRDIR/../top_wrapper.vhd">
+        <FileInfo><Attr Name="UsedIn" Val="synthesis implementation simulation"/></FileInfo>
+      </File>
+      <Config>
+        <Option Name="DesignMode" Val="RTL"/>
+        <Option Name="TopModule" Val="top_wrapper"/>
+        <Option Name="TopAutoSet" Val="TRUE"/>
+      </Config>
+    </FileSet>
+    <FileSet Name="constrs_1" Type="Constrs" RelSrcDir="$PSRCDIR/constrs_1">
+      <Filter Type="Constrs"/>
+      <File Path="$PPRDIR/../constraints.xdc">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis implementation"/>
+        </FileInfo>
+      </File>
+      <Config>
+        <Option Name="ConstrsType" Val="XDC"/>
+      </Config>
+    </FileSet>
+    <FileSet Name="sim_1" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_1">
+      <Filter Type="Srcs"/>
+      <Config>
+        <Option Name="DesignMode" Val="RTL"/>
+        <Option Name="TopModule" Val="top_wrapper"/>
+        <Option Name="TopLib" Val="xil_defaultlib"/>
+        <Option Name="TopAutoSet" Val="TRUE"/>
+        <Option Name="TransportPathDelay" Val="0"/>
+        <Option Name="TransportIntDelay" Val="0"/>
+        <Option Name="SrcSet" Val="sources_1"/>
+      </Config>
+    </FileSet>
+  </FileSets>
+  <Simulators>
+    <Simulator Name="XSim">
+      <Option Name="Description" Val="Vivado Simulator"/>
+      <Option Name="CompiledLib" Val="0"/>
+    </Simulator>
+    </Simulators>
+  <Runs>
+    <Run Id="synth_1" Type="Ft3:Synth" SrcSet="sources_1" Part="xc7z010clg400-1" ConstrsSet="constrs_1" Description="Vivado Synthesis Defaults" State="current" Dir="$PRUNDIR/synth_1">
+      <Strategy Version="1" Flow="Vivado Synthesis 2018"/>
+      <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
+      <ReportStrategy Name="Vivado Synthesis Default Reports" Flow="Vivado Synthesis 2018"/>
+      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
+    </Run>
+    <Run Id="impl_1" Type="Ft2:EntireDesign" Part="xc7z010clg400-1" ConstrsSet="constrs_1" Description="Default settings for Implementation." State="current" Dir="$PRUNDIR/impl_1" SynthRun="synth_1">
+      <Strategy Version="1" Flow="Vivado Implementation 2018"/>
+      <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
+      <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2018"/>
+      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
+    </Run>
+  </Runs>
+  <MsgRuleRules/>
+  <Board/>
+</Project>
