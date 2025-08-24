@@ -1,7 +1,7 @@
 module shader_loader #(
     parameter int INSTR_WIDTH = 32,
     parameter int INSTR_DEPTH = 256
-)(
+) (
     input logic clk,
     input logic rst_n,
 
@@ -15,16 +15,17 @@ module shader_loader #(
     output logic [INSTR_WIDTH-1:0] o_gpu_instr
 );
 
-    // this internal memory holds the shader program (becomes a bram on the fpga)
-    logic [INSTR_WIDTH-1:0] instruction_mem [INSTR_DEPTH-1:0];
+  // this internal memory holds the shader program (becomes a bram on the fpga)
+  logic [INSTR_WIDTH-1:0] instruction_mem[INSTR_DEPTH-1:0];
 
-    always_ff @(posedge clk) begin
-        if (i_host_we) begin
-            instruction_mem[i_host_addr] <= i_host_wdata;
-        end
+  always_ff @(posedge clk) begin
+    if (i_host_we) begin
+      instruction_mem[i_host_addr] <= i_host_wdata;
     end
+  end
 
-    // gpu reads instructions combinationally
-    assign o_gpu_instr = instruction_mem[i_gpu_addr];
+  // gpu reads instructions combinationally
+  assign o_gpu_instr = instruction_mem[i_gpu_addr];
 
 endmodule
+
