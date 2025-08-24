@@ -6,6 +6,7 @@ from typing import List, Dict, Tuple
 
 from isa_constants import OPCODES, REGISTERS
 
+# this is simple two pass assembler for the isa.
 
 def assemble(source_lines: List[str]) -> Tuple[List[int], Dict[str, int]]:
     # pass 1, build symbol table for labels
@@ -43,7 +44,19 @@ def assemble(source_lines: List[str]) -> Tuple[List[int], Dict[str, int]]:
         opcode_val, instr_type = OPCODES[mnemonic]
         word = opcode_val << 27
         
-        if instr_type == 'r_type':
+        # special case for jumpl to have a natural rs1, rs2 order
+        if mnemonic == 'jumpl':
+            rs1 = REGISTERS[operands[0]]
+            rs2 = REGISTERS[operands[1]]
+            imm_str = operands[2]
+            
+            # pc-relative jump for branches
+            imm = symbols[imm_str] - (current_address + 4) if imm_str in symbols else int(imm_str, 0)
+            
+            # note: for jumpl, we use the 'rd' field to hold rs2
+            word |= (rs2 << 23) | (rs1 << 19) | (imm & 0x7FFFF)
+
+        elif instr_type == 'r_type':
             rd = REGISTERS[operands[0]]
             rs1 = REGISTERS[operands[1]]
             rs2 = REGISTERS[operands[2]]
@@ -52,14 +65,7 @@ def assemble(source_lines: List[str]) -> Tuple[List[int], Dict[str, int]]:
         elif instr_type == 'i_type':
             rd = REGISTERS[operands[0]]
             rs1 = REGISTERS[operands[1]]
-            imm_str = operands[2]
-            
-            if imm_str in symbols:
-                # pc relative jump for branches
-                imm = symbols[imm_str] - (current_address + 4)
-            else:
-                imm = int(imm_str, 0)
-            
+            imm = int(operands[2], 0)
             word |= (rd << 23) | (rs1 << 19) | (imm & 0x7FFFF)
 
         elif instr_type == 's_type':
@@ -83,19 +89,24 @@ def assemble(source_lines: List[str]) -> Tuple[List[int], Dict[str, int]]:
 def write_intel_hex(words: List[int], file_path: str):
     with open(file_path, 'w') as f:
         address = 0
-        for word in words:
-            data_bytes = word.to_bytes(4, 'little')
-            byte_count = 4
+        for i in range(0, len(words), 4):
+            chunk = words[i:i+4]
+            byte_count = len(chunk) * 4
             record_type = 0x00
             
-            record = f"{byte_count:02X}{address:04X}{record_type:02X}"
-            record += "".join(f"{b:02X}" for b in data_bytes)
+            record_str = f"{byte_count:02X}{address:04X}{record_type:02X}"
             
-            checksum = sum(bytearray.fromhex(record)) & 0xFF
+            data_bytes = bytearray()
+            for word in chunk:
+                data_bytes.extend(word.to_bytes(4, 'little'))
+
+            record_str += "".join(f"{b:02X}" for b in data_bytes)
+            
+            checksum = sum(bytearray.fromhex(record_str)) & 0xFF
             checksum = (256 - checksum) & 0xFF
             
-            f.write(f":{record}{checksum:02X}\n")
-            address += 4
+            f.write(f":{record_str}{checksum:02X}\n")
+            address += byte_count
             
         f.write(":00000001FF\n")
 
