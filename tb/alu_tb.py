@@ -1,88 +1,89 @@
 import cocotb
-from cocotb.triggers import RisingEdge, Timer
 import random
+from cocotb.triggers import Timer
 
-# helper to pack python list into a 128-bit vector
-def pack_vector(lanes):
-    val = 0
-    for i, lane in enumerate(reversed(lanes)):
-        val = (val << 32) | (lane & 0xFFFFFFFF)
-    return val
-
-# helper to unpack 128-bit vector into a python list
-def unpack_vector(vec_val):
-    lanes = []
-    for i in range(4):
-        lanes.append((vec_val >> (i * 32)) & 0xFFFFFFFF)
-    return lanes
 
 @cocotb.test()
-async def final_alu_test(dut):
-    """verifying the final vector ALU while accounting for its 4-stage pipeline latency"""
-    
-    # clock and reset
-    cocotb.start_soon(cocotb.clock.Clock(dut.clk, 10, units="ns").start())
-    dut.rst.value = 1
-    await RisingEdge(dut.clk)
-    await RisingEdge(dut.clk)
-    dut.rst.value = 0
-    await RisingEdge(dut.clk)
-    dut._log.info("Reset complete! ALU pipeline flushed.")
+async def test_alu(dut):
+    pack = lambda vec: sum(
+        (int(v) & MAXVAL) << (i * data_width) for i, v in enumerate(vec)
+    )
+    unpack = lambda bits: [
+        (bits >> (i * data_width)) & MAXVAL for i in range(vector_size)
+    ]
+    valid_opcodes = [
+        0b00001,
+        0b00010,
+        0b00011,
+        0b01001,
+        0b01010,
+        0b01011,
+        0b10001,
+        0b10010,
+    ]
+    data_width = dut.DATA_WIDTH.value
+    vector_size = dut.VECTOR_SIZE.value
+    MAXVAL = (1 << data_width) - 1  # for easier use later on
 
-    # operation codes ---
-    V_ADD = 0b00001
-    V_MUL = 0b00011
-    DOT4  = 0b10001
-    
-    # pipeline latency
-    # this ALU has a 4-stage pipeline!!! wow!!!
-    # result appears at the output 4 cycles after inputs are applied
-    PIPELINE_DEPTH = 4
+    test_opcodes = valid_opcodes + [
+        0b00000
+    ]  # adding an invalid opcode to test default case
 
-    # test 1: vector add and
-    dut._log.info("Starting Vector Add Test")
-    vec_a_data = [10, 20, 30, 40]
-    vec_b_data = [2,  3,  4,  5]
-    expected_add = [12, 23, 34, 45]
+    dut._log.info("---- ALU TEST STARTS HERE ----")
 
-    dut.vec_a.value = pack_vector(vec_a_data)
-    dut.vec_b.value = pack_vector(vec_b_data)
-    dut.op_code.value = V_ADD
-    
-    # wait for the pipeline to process the data
-    for _ in range(PIPELINE_DEPTH):
-        await RisingEdge(dut.clk)
+    num_iterations = 100
+    dut._log.info(f"Running {num_iterations} tests on ALU...")
 
-    # now check the result
-    result_lanes = unpack_vector(dut.result_vec.value)
-    dut._log.info(f"V_ADD Input A: {vec_a_data}")
-    dut._log.info(f"V_ADD Input B: {vec_b_data}")
-    dut._log.info(f"V_ADD Expected: {expected_add}")
-    dut._log.info(f"V_ADD Actual:   {result_lanes}")
-    assert result_lanes == expected_add, "Vector Add test FAILED!!! :("
-    dut._log.info("Vector Add test PASSED!!! :)")
-    
-    # test 2: 4-component dot product ---
-    await RisingEdge(dut.clk) # move to next cycle to load new data
-    dut._log.info("Starting Dot Product Test")
-    vec_a_dot = [2, 3, 4, 5]
-    vec_b_dot = [10, 20, 30, 40]
-    expected_dot = (2*10) + (3*20) + (4*30) + (5*40) # 20 + 60 + 120 + 200 = 400 incase u didnt know...
+    for i in range(num_iterations):
+        # choose a random opcode
+        opcode = random.choice(test_opcodes)
 
-    dut.vec_a.value = pack_vector(vec_a_dot)
-    dut.vec_b.value = pack_vector(vec_b_dot)
-    dut.op_code.value = DOT4
+        op_a = [random.randint(0, MAXVAL) for _ in range(vector_size)]
+        op_b = [random.randint(0, MAXVAL) for _ in range(vector_size)]
 
-    # wait for pipeline latency
-    for _ in range(PIPELINE_DEPTH):
-        await RisingEdge(dut.clk)
+        dut.i_opcode.value = opcode
+        dut.i_operand_a.value = pack(op_a)
+        dut.i_operand_b.value = pack(op_b)
 
-    # check the scalar result
-    dut._log.info(f"DOT4 Input A: {vec_a_dot}")
-    dut._log.info(f"DOT4 Input B: {vec_b_dot}")
-    dut._log.info(f"DOT4 Expected: {expected_dot}")
-    dut._log.info(f"DOT4 Actual:   {int(dut.result_scalar.value)}")
-    assert dut.result_scalar.value == expected_dot, "Dot Product test FAILED!!! :("
-    dut._log.info("Dot Product test PASSED!!! :)")
+        await Timer(1, units="ns")
 
-    await Timer(50, units="ns") # small delay before ending the test
+        dut_result = unpack(int(dut.o_result.value))
+
+        # Calculating the expected result
+        expected_results = []
+        for j in range(vector_size):
+            expected_val = 0
+            match opcode:
+                case 0b00001:
+                    expected_val = op_a[j] + op_b[j]
+                case 0b00010:
+                    expected_val = op_a[j] - op_b[j]
+                case 0b00011:
+                    expected_val = op_a[j] * op_b[j]
+                case 0b01001:
+                    expected_val = op_a[j] & op_b[j]
+                case 0b01010:
+                    expected_val = op_a[j] | op_b[j]
+                case 0b01011:
+                    expected_val = op_a[j] ^ op_b[j]
+                case 0b10001:
+                    expected_val = op_a[j]
+                case 0b10010:
+                    expected_val = op_b[j]
+                case _:
+                    expected_val = 0
+
+            expected_results.append(expected_val & MAXVAL)
+
+        dut._log.info(f"Test Iteration {i + 1}:")
+        dut._log.info(f"    Opcode: {opcode:05b}")
+        dut._log.info(f"    Operand A: {op_a}")
+        dut._log.info(f"    Operand B: {op_b}")
+        dut._log.info(f"    DUT Result: {dut_result}")
+        dut._log.info(f"    Expected: {expected_results}")
+
+        assert dut_result == expected_results, (
+            f"Mismatch on iteration {i + 1}!, DUT Returned {dut_result} while it expected {expected_results} using opcode {opcode:05b}!!!!"
+        )
+
+    dut._log.info(f"--- TEST FINISHED ---")
