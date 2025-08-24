@@ -1,3 +1,7 @@
+// framebuffer.sv
+// takes a final pixel and generates a memory write request to the interconnect
+// to store it in the main dram.
+
 module framebuffer #(
     parameter int SCREEN_WIDTH = 640,
     parameter int SCREEN_HEIGHT = 480,
@@ -6,31 +10,27 @@ module framebuffer #(
     input logic clk,
     input logic rst_n,
     
+    // input from the fragment shader stage
     input logic i_pixel_we,
     input logic [9:0] i_pixel_x,
     input logic [9:0] i_pixel_y,
     input logic [COLOR_WIDTH-1:0] i_pixel_color,
 
+    // output to the memory interconnect (as a master)
+    output logic o_mem_req,
     output logic [$clog2(SCREEN_WIDTH*SCREEN_HEIGHT)-1:0] o_mem_addr,
-    output logic [COLOR_WIDTH-1:0] o_mem_wdata,
-    output logic o_mem_we
+    output logic [COLOR_WIDTH-1:0] o_mem_wdata
 );
     
-    localparam int FB_DEPTH = SCREEN_WIDTH * SCREEN_HEIGHT;
-    logic [COLOR_WIDTH-1:0] frame_buffer_mem [FB_DEPTH-1];
-    
-    logic [$clog2(FB_DEPTH)-1:0] write_addr;
+    logic [$clog2(SCREEN_WIDTH*SCREEN_HEIGHT)-1:0] write_addr;
 
     // turning 2d screen coordinates into a 1d memory address
     assign write_addr = i_pixel_y * SCREEN_WIDTH + i_pixel_x;
     
-    always_ff @(posedge clk) begin
-        if (i_pixel_we) begin
-            frame_buffer_mem[write_addr] <= i_pixel_color;
-        end
-    end
-
-    // just wiring signals out to the external memory controller
-    assign o_mem_addr  = write_addr;
+    // drives the memory request bus directly
+    // asserts a one-cycle request whenever a valid pixel arrives from the fragment shader
+    assign o_mem_req = i_pixel_we;
+    assign o_mem_addr = write_addr;
     assign o_mem_wdata = i_pixel_color;
-    assign o_mem_we    = i_pixel_we;
+
+endmodule
