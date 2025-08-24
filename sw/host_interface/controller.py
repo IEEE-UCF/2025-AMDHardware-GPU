@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import ctypes
-import argparse
+import time
 
 try:
     gpu_lib = ctypes.CDLL('./libgpudriver.so')
@@ -15,67 +15,82 @@ class GpuDevice(ctypes.Structure):
 
 gpu_lib.gpu_init.argtypes = [ctypes.c_uint64]
 gpu_lib.gpu_init.restype = ctypes.POINTER(GpuDevice)
-
-gpu_lib.gpu_load_shader.argtypes = [ctypes.POINTER(GpuDevice), ctypes.POINTER(ctypes.c_uint32), ctypes.c_size_t]
-gpu_lib.gpu_load_shader.restype = ctypes.c_bool
-
-gpu_lib.gpu_reset.argtypes = [ctypes.POINTER(GpuDevice)]
-
 gpu_lib.gpu_destroy.argtypes = [ctypes.POINTER(GpuDevice)]
+gpu_lib.gpu_reset.argtypes = [ctypes.POINTER(GpuDevice)]
+gpu_lib.gpu_start.argtypes = [ctypes.POINTER(GpuDevice)]
+gpu_lib.gpu_stop.argtypes = [ctypes.POINTER(GpuDevice)]
+gpu_lib.gpu_get_status.argtypes = [ctypes.POINTER(GpuDevice)]
+gpu_lib.gpu_get_status.restype = ctypes.c_uint32
+gpu_lib.gpu_get_error.argtypes = [ctypes.POINTER(GpuDevice)]
+gpu_lib.gpu_get_error.restype = ctypes.c_uint32
+gpu_lib.gpu_is_busy.argtypes = [ctypes.POINTER(GpuDevice)]
+gpu_lib.gpu_is_busy.restype = ctypes.c_bool
+gpu_lib.gpu_wait_for_idle.argtypes = [ctypes.POINTER(GpuDevice), ctypes.c_uint32]
+gpu_lib.gpu_wait_for_idle.restype = ctypes.c_bool
 
 
-def load_shader_from_file(dev: ctypes.POINTER(GpuDevice), hex_file_path: str) -> bool:
-    print(f"loading shader from '{hex_file_path}'...")
-    
-    try:
-        with open(hex_file_path, 'r') as f:
-            instructions = [int(line.strip(), 16) for line in f if line.strip()]
-    except FileNotFoundError:
-        print(f"error: file not found '{hex_file_path}'")
-        return False
-    except ValueError as e:
-        print(f"error: invalid hex value in file. {e}")
-        return False
+class GPUController:
+    def __init__(self, base_addr: int):
+        self.dev = gpu_lib.gpu_init(base_addr)
+        if not self.dev:
+            raise RuntimeError("gpu_init failed. could not create device handle.")
+        print(f"gpu controller initialized at address 0x{base_addr:08x}.")
 
-    if not instructions:
-        print("warning: shader file is empty.")
-        return True
+    def __del__(self):
+        if self.dev:
+            gpu_lib.gpu_destroy(self.dev)
+            print("gpu controller shut down.")
 
-    instr_count = len(instructions)
-    c_instr_array = (ctypes.c_uint32 * instr_count)(*instructions)
+    def reset(self):
+        print("sending reset command...")
+        gpu_lib.gpu_reset(self.dev)
 
-    print(f"parsed {instr_count} instructions. sending to gpu...")
-    
-    success = gpu_lib.gpu_load_shader(dev, c_instr_array, instr_count)
-    
-    if success:
-        print("shader loaded successfully.")
-    else:
-        print("error: failed to load shader into gpu. device timed out.")
+    def start(self):
+        print("sending start command...")
+        gpu_lib.gpu_start(self.dev)
+
+    def stop(self):
+        print("sending stop command...")
+        gpu_lib.gpu_stop(self.dev)
+
+    def is_busy(self) -> bool:
+        return gpu_lib.gpu_is_busy(self.dev)
+
+    def get_status_reg(self) -> int:
+        return gpu_lib.gpu_get_status(self.dev)
         
-    return success
+    def get_error_code(self) -> int:
+        return gpu_lib.gpu_get_error(self.dev)
+        
+    def wait_for_idle(self, timeout_s: float = 1.0) -> bool:
+        timeout_cycles = int(timeout_s * 100_000_000)
+        return gpu_lib.gpu_wait_for_idle(self.dev, timeout_cycles)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="load a .hex shader file to the fpga gpu.")
-    parser.add_argument("shader_file", help="path to the .hex shader file to load.")
-    parser.add_argument("--base-addr", type=lambda x: int(x, 0), default=0x40000000,
-                        help="memory-mapped base address of the gpu (e.g., 0x40000000).")
-    args = parser.parse_args()
-
-    print(f"initializing gpu at base address 0x{args.base_addr:08x}...")
-    dev = gpu_lib.gpu_init(args.base_addr)
-    if not dev:
-        print("error: gpu_init failed. unable to create device handle.")
+    try:
+        gpu = GPUController(base_addr=0x40000000)
+    except RuntimeError as e:
+        print(f"error: {e}")
         return
 
-    print("resetting gpu...")
-    gpu_lib.gpu_reset(dev)
+    gpu.reset()
     
-    load_shader_from_file(dev, args.shader_file)
+    gpu.start()
+    
+    print("gpu is running... waiting for it to go idle.")
+    time.sleep(0.5)
+    
+    if gpu.wait_for_idle(timeout_s=1.0):
+        print("gpu is now idle.")
+    else:
+        print("gpu timed out waiting for idle.")
 
-    gpu_lib.gpu_destroy(dev)
-    print("done.")
+    status = gpu.get_status_reg()
+    error = gpu.get_error_code()
+    
+    print(f"final status register: 0x{status:08x}")
+    print(f"final error code: 0x{error:02x}")
 
 
 if __name__ == "__main__":
