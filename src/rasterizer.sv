@@ -15,6 +15,10 @@ module rasterizer #(
     output logic o_fragment_valid,
     output logic signed [CORD_WIDTH-1:0] o_fragment_x,
     output logic signed [CORD_WIDTH-1:0] o_fragment_y,
+    // barycentric weights for the interpolator
+    output logic signed [(CORD_WIDTH*2):0] o_lambda0,
+    output logic signed [(CORD_WIDTH*2):0] o_lambda1,
+    output logic signed [(CORD_WIDTH*2):0] o_lambda2,
     output logic o_done
 );
 
@@ -31,13 +35,18 @@ module rasterizer #(
 
     // edge function E(x, y) = (x - vx1)*(vy2 - vy1) - (y - vy1)*(vx2 - vx1)
     // simple 2d cross product to see which side of an edge (x,y) is on
-    assign edge0 = (x_reg - v0_x_reg) * (v1_y_reg - v0_y_reg) - (y_reg - v0_y_reg) * (v1_x_reg - v0_x_reg);
-    assign edge1 = (x_reg - v1_x_reg) * (v2_y_reg - v1_y_reg) - (y_reg - v1_y_reg) * (v2_x_reg - v1_x_reg);
-    assign edge2 = (x_reg - v2_x_reg) * (v0_y_reg - v2_y_reg) - (y_reg - v2_y_reg) * (v0_x_reg - v2_x_reg);
+    assign edge0 = (x_reg - v1_x_reg) * (v2_y_reg - v1_y_reg) - (y_reg - v1_y_reg) * (v2_x_reg - v1_x_reg);
+    assign edge1 = (x_reg - v2_x_reg) * (v0_y_reg - v2_y_reg) - (y_reg - v2_y_reg) * (v0_x_reg - v2_x_reg);
+    assign edge2 = (x_reg - v0_x_reg) * (v1_y_reg - v0_y_reg) - (y_reg - v0_y_reg) * (v1_x_reg - v0_x_reg);
 
     // for a counter clockwise triangle, the pixel is inside if it's on the positive
     // (or zero) side of all three edges
     assign is_inside = (edge0 >= 0) && (edge1 >= 0) && (edge2 >= 0);
+
+    // the edge function results are also proportional to the barycentric weights
+    assign o_lambda0 = edge0;
+    assign o_lambda1 = edge1;
+    assign o_lambda2 = edge2;
 
     // scanning fsm (scanning round the bounding box!!!)
     always_ff @(posedge clk or negedge rst_n) begin
