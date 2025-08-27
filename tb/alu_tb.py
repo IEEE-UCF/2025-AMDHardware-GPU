@@ -32,7 +32,7 @@ async def test_alu(dut):
 
     dut._log.info("---- ALU TEST STARTS HERE ----")
 
-    num_iterations = 100
+    num_iterations = 10000
     dut._log.info(f"Running {num_iterations} tests on ALU...")
 
     for i in range(num_iterations):

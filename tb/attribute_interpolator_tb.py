@@ -1,12 +1,11 @@
 import cocotb
 import random
-from cocotb.triggers import ReadOnly
-from cocotb.triggers import Timer
+from cocotb.triggers import ReadOnly, Timer
 
 
 @cocotb.test()
 async def test_attribute_interpolator(dut):
-    numIter: int = 10000
+    numIter: int = 1000000
     attr_width: int = dut.ATTR_WIDTH.value
     weight_width: int = dut.WEIGHT_WIDTH.value
     max_attr = (1 << (attr_width - 1)) - 1
@@ -29,7 +28,9 @@ async def test_attribute_interpolator(dut):
 
         # finding our version
         testSum = (ia0 * il0) + (ia1 * il1) + (ia2 * il2)
-        testSum = testSum // (2**weight_width)  # doing an effective left shift of 32 bits
+        testSum = testSum // (
+            2**weight_width
+        )  # doing an effective left shift of 32 bits
 
         # plugging into dut
         dut.i_attr0.value = ia0
@@ -54,6 +55,6 @@ async def test_attribute_interpolator(dut):
             f"Mismatch on iteration {i + 1}!, DUT Returned {dutRes} while it expected {testSum} using Attributes [{ia0}, {ia1}, {ia2}] and Lambdas [{il0, il1, il2}]!!!!"
         )
 
-        await Timer(1, units='ns')
+        await Timer(1, units="ns")
 
     dut._log.info(f"--- TEST FINISHED ---")
