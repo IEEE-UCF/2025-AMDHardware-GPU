@@ -1,8 +1,0 @@
-<testsuites name="results">
-  <testsuite name="all" package="all">
-    <property name="random_seed" value="1756069683" />
-    <testcase name="test_alu" classname="alu_tb" file="/home/quil/Documents/GitRepos/2025-AMDHardware-GPU/tb/alu_tb.py" lineno="6" time="0.0026688575744628906" sim_time_ns="7.001" ratio_time="2623.219787743434">
-      <failure message="Test failed with RANDOM_SEED=1756069683" />
-    </testcase>
-  </testsuite>
-</testsuites>

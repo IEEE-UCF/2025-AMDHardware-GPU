@@ -1,6 +1,7 @@
 import cocotb
 import random
 from cocotb.triggers import Timer
+from cocotb.binary import BinaryValue
 
 
 @cocotb.test()
@@ -37,13 +38,19 @@ async def test_alu(dut):
     for i in range(num_iterations):
         # choose a random opcode
         opcode = random.choice(test_opcodes)
-
         op_a = [random.randint(0, MAXVAL) for _ in range(vector_size)]
         op_b = [random.randint(0, MAXVAL) for _ in range(vector_size)]
 
+        packed_a = BinaryValue(n_bits=vector_size * data_width, bigEndian=False)
+        packed_b = BinaryValue(n_bits=vector_size * data_width, bigEndian=False)
+
+        for k in range(vector_size):
+            packed_a[(k + 1) * data_width - 1 : k * data_width] = op_a[k]
+            packed_b[(k + 1) * data_width - 1 : k * data_width] = op_b[k]
+
         dut.i_opcode.value = opcode
-        dut.i_operand_a.value = pack(op_a)
-        dut.i_operand_b.value = pack(op_b)
+        dut.i_operand_a.value = packed_a
+        dut.i_operand_b.value = packed_b
 
         await Timer(1, units="ns")
 
