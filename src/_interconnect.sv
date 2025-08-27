@@ -1,4 +1,4 @@
-module interconnect #(
+module _interconnect #(
     parameter int NUM_MASTERS = 2,
     parameter int NUM_SLAVES  = 4,
     parameter int ADDR_WIDTH  = 32,

@@ -93,7 +93,7 @@ module gpu_top #(
         .o_mem_addr(master_addr[1])
     );
 
-    interconnect #( .NUM_MASTERS(NUM_MASTERS), .NUM_SLAVES(NUM_SLAVES) ) interconnect_inst(
+    _interconnect #( .NUM_MASTERS(NUM_MASTERS), .NUM_SLAVES(NUM_SLAVES) ) interconnect_inst(
         .clk(clk), .rst_n(glbl_rst_n),
         .i_master_req(master_req), .i_master_addr(master_addr), .i_master_wdata(master_wdata), .o_master_rdata(master_rdata),
         .o_slave_req(slave_req), .o_slave_addr(slave_addr), .o_slave_wdata(slave_wdata), .i_slave_rdata(slave_rdata)
