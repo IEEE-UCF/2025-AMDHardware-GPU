@@ -83,7 +83,7 @@ async def test_random_samples(dut):
 	dut.rst_n.value = 1
 	await RisingEdge(dut.clk)
 
-	# Read parameters if available; fall back to defaults
+	# Read parameters
 	try:
 		TEX_WIDTH = int(dut.TEX_WIDTH.value)
 	except Exception:
@@ -116,7 +116,7 @@ async def test_random_samples(dut):
 		u = rng.randint(0, (1 << CORD_WIDTH) - 1)
 		v = rng.randint(0, (1 << CORD_WIDTH) - 1)
 
-		# Mirror SystemVerilog truncation: tex_x := (u * TEX_WIDTH) truncated to width_bits
+		# tex_x := (u * TEX_WIDTH) truncated to width_bits
 		tex_x = (u * TEX_WIDTH) & mask_x
 		tex_y = (v * TEX_HEIGHT) & mask_y
 		addr = ((tex_y * TEX_WIDTH) + tex_x) & mask_depth
