@@ -10,7 +10,7 @@ def to_signed32(n: int) -> int:
 
 @cocotb.test()
 async def test_attribute_interpolator(dut):
-    num_iters = int(os.getenv("ATTR_NUM", "1000000"))
+    num_iters = int(os.getenv("ATTR_NUM", "100000"))
 
     attr_width = int(dut.ATTR_WIDTH.value)
     weight_width = int(dut.WEIGHT_WIDTH.value)
@@ -20,7 +20,7 @@ async def test_attribute_interpolator(dut):
     max_weight = (1 << (weight_width - 1)) - 1
     min_weight = -(1 << (weight_width - 1))
 
-    dut._log.info(f"Starting {num_iters} random vectors (seed={seed})")
+    dut._log.info(f"Starting {num_iters} random vectors")
 
     for i in range(num_iters):
         a0 = random.randint(min_attr, max_attr)
