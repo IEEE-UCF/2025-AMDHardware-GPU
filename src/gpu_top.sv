@@ -237,7 +237,7 @@ module gpu_top #(
     .clk          (clk),
     .rst_n        (glbl_rst_n),
     .i_host_we    (i_bus_we && i_bus_addr >= ADDR_SHADER_BASE),
-    .i_host_addr  ((i_bus_addr - ADDR_SHADER_BASE) >> 2),  // Word addressing
+    .i_host_addr  (i_bus_addr[$clog2(INSTR_DEPTH)-1+2:2]),  // Word addressing
     .i_host_wdata (i_bus_wdata),
     .i_gpu_addr   (shader_pc),
     .o_gpu_instr  (shader_instruction)
@@ -303,7 +303,7 @@ module gpu_top #(
 
   vertex_fetch #(
     .ATTR_WIDTH       (32),
-    .ATTRS_PER_VERTEX ((VERTEX_TOTAL_BITS + 31) / 32),
+    .ATTRS_PER_VERTEX (11),
     .ADDR_WIDTH       (ADDR_WIDTH)
   ) vf_inst (
     .clk           (clk),
