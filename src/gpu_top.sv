@@ -291,6 +291,10 @@ module gpu_top #(
     .i_slave_rdata  (slave_rdata)
   );
   
+  logic [DATA_WIDTH-1:0] dram_rdata_delayed;
+  always_ff @(posedge clk) begin
+    dram_rdata_delayed <= i_dram_rdata;
+  end
 
   assign o_dram_we = slave_req[0];  // Your interconnect doesn't have separate we signal
   assign o_dram_addr = slave_addr[0];

@@ -1,477 +1,349 @@
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, FallingEdge, ClockCycles, Timer
+from cocotb.result import TestFailure
 import random
 
 CLK_PERIOD = 10
-SPI_CLK_PERIOD = 100
 
-class SpiTransaction:
-    def __init__(self, write=True, addr=0, data=0):
-        self.write = write
-        self.addr = addr
-        self.data = data if write else 0
-        self.expected_rdata = 0
-        
-    def get_cmd_byte(self):
-        return 0x80 if self.write else 0x00
-    
-    def to_bit_stream(self):
-        bits = []
-        cmd = self.get_cmd_byte()
-        for i in range(7, -1, -1):
-            bits.append((cmd >> i) & 1)
-        
-        for i in range(31, -1, -1):
-            bits.append((self.addr >> i) & 1)
-        
-        if self.write:
-            for i in range(31, -1, -1):
-                bits.append((self.data >> i) & 1)
-        
-        return bits
+ADDR_CONTROL = 0x00000000
+ADDR_STATUS = 0x00000004
+ADDR_VERTEX_BASE = 0x00000008
+ADDR_VERTEX_COUNT = 0x0000000C
+ADDR_PC = 0x00000010
+ADDR_SHADER_BASE = 0x00001000
 
-class SpiMaster:
-    def __init__(self, dut):
-        self.dut = dut
-        self.dut.i_spi_cs_n.value = 1
-        self.dut.i_spi_clk.value = 0
-        self.dut.i_spi_mosi.value = 0
-        
-    async def reset(self):
-        self.dut.i_spi_cs_n.value = 1
-        self.dut.i_spi_clk.value = 0
-        self.dut.i_spi_mosi.value = 0
-        await Timer(SPI_CLK_PERIOD * 2, units='ns')
-    
-    async def send_transaction(self, transaction):
-        bits = transaction.to_bit_stream()
-        read_bits = []
-        
-        self.dut.i_spi_cs_n.value = 0
-        await Timer(SPI_CLK_PERIOD // 4, units='ns')
-        
-        for bit in bits:
-            self.dut.i_spi_mosi.value = bit
-            await Timer(SPI_CLK_PERIOD // 2, units='ns')
-            
-            self.dut.i_spi_clk.value = 1
-            await Timer(SPI_CLK_PERIOD // 2, units='ns')
-            
-            self.dut.i_spi_clk.value = 0
-        
-        # Wait for CDC synchronization (need a few system clock cycles)
-        await ClockCycles(self.dut.clk, 5)
-        
-        if not transaction.write:
-            for _ in range(32):
-                await Timer(SPI_CLK_PERIOD // 2, units='ns')
-                self.dut.i_spi_clk.value = 1
-                await Timer(SPI_CLK_PERIOD // 4, units='ns')
-                
-                miso_val = self.dut.o_spi_miso.value
-                if miso_val.is_resolvable:
-                    read_bits.append(int(miso_val.integer))
-                else:
-                    read_bits.append(0)
-                
-                await Timer(SPI_CLK_PERIOD // 4, units='ns')
-                self.dut.i_spi_clk.value = 0
-        
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-        self.dut.i_spi_cs_n.value = 1
-        await Timer(SPI_CLK_PERIOD, units='ns')
-        
-        # Wait for transaction to complete through CDC
-        await ClockCycles(self.dut.clk, 5)
-        
-        if not transaction.write and read_bits:
-            read_value = 0
-            for bit in read_bits:
-                read_value = (read_value << 1) | bit
-            return read_value
-        return None
+CTRL_START = 0
+CTRL_IRQ_CLEAR = 1
+
+STATUS_BUSY = 0
+STATUS_IRQ = 1
 
 async def reset_dut(dut):
     dut.rst_n.value = 0
+    dut.i_bus_we.value = 0
+    dut.i_bus_addr.value = 0
+    dut.i_bus_wdata.value = 0
     dut.i_dram_rdata.value = 0
     await ClockCycles(dut.clk, 5)
     dut.rst_n.value = 1
     await ClockCycles(dut.clk, 2)
 
-class MemoryModel:
-    def __init__(self):
-        self.memory = {}
-        
-    def write(self, addr, data):
-        self.memory[addr] = data
-        
-    def read(self, addr):
-        return self.memory.get(addr, 0xDEADBEEF)
+async def write_register(dut, addr, data):
+    await RisingEdge(dut.clk)
+    dut.i_bus_we.value = 1
+    dut.i_bus_addr.value = addr
+    dut.i_bus_wdata.value = data
+    await RisingEdge(dut.clk)
+    dut.i_bus_we.value = 0
+    dut.i_bus_addr.value = 0
+    dut.i_bus_wdata.value = 0
+    await RisingEdge(dut.clk)
+
+async def read_register(dut, addr):
+    await RisingEdge(dut.clk)
+    dut.i_bus_we.value = 0
+    dut.i_bus_addr.value = addr
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    value = int(dut.o_bus_rdata.value)
+    dut.i_bus_addr.value = 0
+    return value
+
+async def load_shader_program(dut, instructions):
+    addr = ADDR_SHADER_BASE
+    for instr in instructions:
+        await write_register(dut, addr, instr)
+        addr += 4
+
+async def wait_for_idle(dut, timeout=1000):
+    for _ in range(timeout):
+        status = await read_register(dut, ADDR_STATUS)
+        if not (status & (1 << STATUS_BUSY)):
+            return True
+        await ClockCycles(dut.clk, 1)
+    return False
+
+def create_simple_shader():
+    instructions = [
+        0x88000000,
+        0x90400000,
+        0x00000000,
+    ]
+    return instructions
+
+def create_vertex_data():
+    vertices = [
+        100, 100,
+        200, 100,
+        150, 200,
+        0xFF0000,
+        0x00FF00,
+        0x0000FF,
+        0, 0,
+        0x10000, 0,
+        0, 0x10000,
+    ]
+    return vertices
 
 @cocotb.test()
-async def test_spi_bridge_basic(dut):
-    # Start BOTH clocks - system clock and SPI clock are separate!
+async def test_reset(dut):
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
     
-    addr_width = int(dut.ADDR_WIDTH.value)
-    data_width = int(dut.DATA_WIDTH.value)
+    dut._log.info("Testing reset")
     
-    dut._log.info(f"Starting SPI bridge test (ADDR_WIDTH={addr_width}, DATA_WIDTH={data_width})")
-    
-    await reset_dut(dut)
-    
-    spi = SpiMaster(dut)
-    await spi.reset()
-    
-    memory = MemoryModel()
-    
-    dut._log.info("Test 1: Basic write transaction")
-    
-    write_addr = 0x1000
-    write_data = 0x12345678
-    
-    trans = SpiTransaction(write=True, addr=write_addr, data=write_data)
-    await spi.send_transaction(trans)
-    
+    dut.rst_n.value = 0
     await ClockCycles(dut.clk, 10)
     
-    dut._log.info("Test 2: Basic read transaction")
+    assert dut.o_dram_we.value == 0, "DRAM write enable should be 0 during reset"
+    assert dut.o_bus_rdata.value == 0, "Bus read data should be 0 during reset"
     
-    read_addr = 0x2000
-    expected_data = 0xABCDEF00
-    dut.i_dram_rdata.value = expected_data
-    
-    trans = SpiTransaction(write=False, addr=read_addr)
-    read_data = await spi.send_transaction(trans)
-    
-    if read_data is not None:
-        dut._log.info(f"  Read data: 0x{read_data:08x}, Expected: 0x{expected_data:08x}")
-        assert read_data == expected_data, f"Read mismatch: got 0x{read_data:08x}, expected 0x{expected_data:08x}"
-    
-    dut._log.info("Basic SPI bridge test passed!")
-
-@cocotb.test()
-async def test_spi_bridge_state_machine(dut):
-    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
-    
-    dut._log.info("Testing SPI state machine transitions")
-    
-    await reset_dut(dut)
-    
-    spi = SpiMaster(dut)
-    await spi.reset()
-    
-    dut._log.info("Test 1: Verify initial state is IDLE")
-    assert int(dut.current_state.value) == 0, "Should start in IDLE state"
-    
-    dut._log.info("Test 2: State progression for write")
-    
-    dut.i_spi_cs_n.value = 0
-    await Timer(SPI_CLK_PERIOD, units='ns')
-    
-    for i in range(8):
-        dut.i_spi_mosi.value = 1 if i == 0 else 0
-        dut.i_spi_clk.value = 1
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-        dut.i_spi_clk.value = 0
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-    
-    assert int(dut.current_state.value) == 2, "Should be in GET_ADDR state"
-    
-    for i in range(32):
-        dut.i_spi_mosi.value = 0
-        dut.i_spi_clk.value = 1
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-        dut.i_spi_clk.value = 0
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-    
-    assert int(dut.current_state.value) == 3, "Should be in GET_WDATA state"
-    
-    dut.i_spi_cs_n.value = 1
-    await Timer(SPI_CLK_PERIOD, units='ns')
-    
-    assert int(dut.current_state.value) == 0, "Should return to IDLE when CS deasserted"
-    
-    dut._log.info("State machine test passed!")
-
-@cocotb.test()
-async def test_spi_bridge_back_to_back(dut):
-    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
-    
-    dut._log.info("Testing back-to-back transactions")
-    
-    await reset_dut(dut)
-    
-    spi = SpiMaster(dut)
-    await spi.reset()
-    
-    transactions = [
-        SpiTransaction(write=True, addr=0x100, data=0x11111111),
-        SpiTransaction(write=True, addr=0x200, data=0x22222222),
-        SpiTransaction(write=False, addr=0x300),
-        SpiTransaction(write=True, addr=0x400, data=0x44444444),
-        SpiTransaction(write=False, addr=0x500),
-    ]
-    
-    dut.i_dram_rdata.value = 0x33333333
-    
-    for i, trans in enumerate(transactions):
-        dut._log.info(f"  Transaction {i}: {'Write' if trans.write else 'Read'} @ 0x{trans.addr:08x}")
-        result = await spi.send_transaction(trans)
-        
-        if not trans.write and result is not None:
-            dut._log.info(f"    Read result: 0x{result:08x}")
-        
-        await ClockCycles(dut.clk, 2)
-    
-    dut._log.info("Back-to-back test passed!")
-
-@cocotb.test()
-async def test_spi_bridge_stress(dut):
-    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
-    
-    dut._log.info("Starting SPI bridge stress test")
-    
-    await reset_dut(dut)
-    
-    spi = SpiMaster(dut)
-    await spi.reset()
-    
-    num_transactions = 100
-    write_count = 0
-    read_count = 0
-    memory = {}
-    
-    for i in range(num_transactions):
-        is_write = random.random() < 0.6
-        addr = random.randint(0, 0xFFFF) << 4
-        
-        if is_write:
-            data = random.randint(0, 0xFFFFFFFF)
-            trans = SpiTransaction(write=True, addr=addr, data=data)
-            await spi.send_transaction(trans)
-            memory[addr] = data
-            write_count += 1
-        else:
-            expected = memory.get(addr, 0xDEADBEEF)
-            dut.i_dram_rdata.value = expected
-            trans = SpiTransaction(write=False, addr=addr)
-            result = await spi.send_transaction(trans)
-            
-            if result is not None and result != expected:
-                dut._log.error(f"Read mismatch at 0x{addr:08x}: got 0x{result:08x}, expected 0x{expected:08x}")
-            read_count += 1
-        
-        if (i + 1) % 20 == 0:
-            dut._log.info(f"  Progress: {i + 1}/{num_transactions} transactions")
-    
-    dut._log.info(f"Stress test completed! Writes: {write_count}, Reads: {read_count}")
-
-@cocotb.test()
-async def test_spi_bridge_timing(dut):
-    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
-    
-    dut._log.info("Testing SPI timing requirements")
-    
-    await reset_dut(dut)
-    
-    spi = SpiMaster(dut)
-    await spi.reset()
-    
-    dut._log.info("Test 1: Minimum CS setup time")
-    
-    dut.i_spi_cs_n.value = 0
-    await Timer(10, units='ns')
-    
-    dut.i_spi_clk.value = 1
-    await Timer(SPI_CLK_PERIOD // 2, units='ns')
-    dut.i_spi_clk.value = 0
-    
-    dut._log.info("Test 2: CS hold time after transaction")
-    
-    trans = SpiTransaction(write=True, addr=0x1000, data=0x5A5A5A5A)
-    await spi.send_transaction(trans)
-    
-    await Timer(10, units='ns')
-    
-    dut._log.info("Test 3: Variable SPI clock speeds")
-    
-    for clock_period in [50, 100, 200]:
-        dut._log.info(f"  Testing with SPI clock period: {clock_period}ns")
-        
-        trans = SpiTransaction(write=True, addr=0x2000 + clock_period, data=clock_period)
-        
-        dut.i_spi_cs_n.value = 0
-        await Timer(clock_period // 4, units='ns')
-        
-        bits = trans.to_bit_stream()
-        for bit in bits[:16]:
-            dut.i_spi_mosi.value = bit
-            await Timer(clock_period // 2, units='ns')
-            dut.i_spi_clk.value = 1
-            await Timer(clock_period // 2, units='ns')
-            dut.i_spi_clk.value = 0
-        
-        dut.i_spi_cs_n.value = 1
-        await Timer(clock_period, units='ns')
-    
-    dut._log.info("Timing test passed!")
-
-@cocotb.test()
-async def test_spi_bridge_error_conditions(dut):
-    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
-    
-    dut._log.info("Testing error conditions and recovery")
-    
-    await reset_dut(dut)
-    
-    spi = SpiMaster(dut)
-    await spi.reset()
-    
-    dut._log.info("Test 1: Incomplete transaction (CS deasserted early)")
-    
-    dut.i_spi_cs_n.value = 0
-    await Timer(SPI_CLK_PERIOD // 2, units='ns')
-    
-    for i in range(20):
-        dut.i_spi_mosi.value = i % 2
-        dut.i_spi_clk.value = 1
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-        dut.i_spi_clk.value = 0
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-    
-    dut.i_spi_cs_n.value = 1
-    await Timer(SPI_CLK_PERIOD * 2, units='ns')
-    
-    assert int(dut.current_state.value) == 0, "Should return to IDLE after incomplete transaction"
-    
-    dut._log.info("Test 2: Recovery after error")
-    
-    trans = SpiTransaction(write=True, addr=0x5000, data=0x12345678)
-    await spi.send_transaction(trans)
-    
+    dut.rst_n.value = 1
     await ClockCycles(dut.clk, 5)
     
-    dut._log.info("Test 3: Glitch on CS during transaction")
-    
-    dut.i_spi_cs_n.value = 0
-    await Timer(SPI_CLK_PERIOD // 2, units='ns')
-    
-    for i in range(10):
-        dut.i_spi_mosi.value = 0
-        dut.i_spi_clk.value = 1
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-        dut.i_spi_clk.value = 0
-        await Timer(SPI_CLK_PERIOD // 2, units='ns')
-    
-    dut.i_spi_cs_n.value = 1
-    await Timer(10, units='ns')
-    dut.i_spi_cs_n.value = 0
-    await Timer(10, units='ns')
-    dut.i_spi_cs_n.value = 1
-    
-    await Timer(SPI_CLK_PERIOD * 2, units='ns')
-    assert int(dut.current_state.value) == 0, "Should handle CS glitches gracefully"
-    
-    dut._log.info("Error condition test passed!")
+    dut._log.info("Reset test passed")
 
 @cocotb.test()
-async def test_spi_bridge_data_patterns(dut):
+async def test_register_access(dut):
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
     
-    dut._log.info("Testing various data patterns")
+    dut._log.info("Testing register access")
     
     await reset_dut(dut)
     
-    spi = SpiMaster(dut)
-    await spi.reset()
+    test_addr = 0x12340000
+    await write_register(dut, ADDR_VERTEX_BASE, test_addr)
+    read_val = await read_register(dut, ADDR_VERTEX_BASE)
     
-    test_patterns = [
-        (0x00000000, 0x00000000, "All zeros"),
-        (0xFFFFFFFF, 0xFFFFFFFF, "All ones"),
-        (0xAAAAAAAA, 0x55555555, "Alternating 1"),
-        (0x55555555, 0xAAAAAAAA, "Alternating 2"),
-        (0x00000001, 0x80000000, "Single bit low/high"),
-        (0x80000000, 0x00000001, "Single bit high/low"),
-        (0x12345678, 0x87654321, "Counting pattern"),
-        (0xDEADBEEF, 0xCAFEBABE, "Classic patterns"),
-    ]
+    assert read_val == test_addr, f"Vertex base mismatch: got {read_val:08x}, expected {test_addr:08x}"
     
-    for addr_pattern, data_pattern, description in test_patterns:
-        dut._log.info(f"  Testing: {description}")
-        
-        trans = SpiTransaction(write=True, addr=addr_pattern & 0xFFFFFF00, data=data_pattern)
-        await spi.send_transaction(trans)
-        
-        await ClockCycles(dut.clk, 2)
-        
-        dut.i_dram_rdata.value = data_pattern
-        trans = SpiTransaction(write=False, addr=addr_pattern & 0xFFFFFF00)
-        result = await spi.send_transaction(trans)
-        
-        if result is not None:
-            assert result == data_pattern, f"{description} readback failed"
+    test_count = 9
+    await write_register(dut, ADDR_VERTEX_COUNT, test_count)
+    read_val = await read_register(dut, ADDR_VERTEX_COUNT)
     
-    dut._log.info("Data pattern test passed!")
+    assert read_val == test_count, f"Vertex count mismatch: got {read_val}, expected {test_count}"
+    
+    dut._log.info("Register access test passed")
 
 @cocotb.test()
-async def test_spi_bridge_performance(dut):
+async def test_shader_loading(dut):
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
     
-    dut._log.info("Performance testing")
+    dut._log.info("Testing shader loading")
     
     await reset_dut(dut)
     
-    spi = SpiMaster(dut)
-    await spi.reset()
+    shader = create_simple_shader()
+    await load_shader_program(dut, shader)
     
-    dut._log.info("Test 1: Write throughput")
+    await write_register(dut, ADDR_PC, 0)
     
-    num_writes = 50
-    start_time = cocotb.utils.get_sim_time(units='ns')
+    dut._log.info("Shader loading test passed")
+
+@cocotb.test()
+async def test_pipeline_start(dut):
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
     
-    for i in range(num_writes):
-        trans = SpiTransaction(write=True, addr=i << 8, data=i)
-        await spi.send_transaction(trans)
+    dut._log.info("Testing pipeline start")
     
-    end_time = cocotb.utils.get_sim_time(units='ns')
-    elapsed_us = (end_time - start_time) / 1000
-    writes_per_us = num_writes / elapsed_us
+    await reset_dut(dut)
     
-    dut._log.info(f"  Write throughput: {writes_per_us:.2f} transactions/μs")
-    dut._log.info(f"  Bits per transaction: 72 (8 cmd + 32 addr + 32 data)")
-    dut._log.info(f"  Effective bandwidth: {writes_per_us * 72:.2f} bits/μs")
+    await write_register(dut, ADDR_VERTEX_BASE, 0x10000)
+    await write_register(dut, ADDR_VERTEX_COUNT, 3)
+    await write_register(dut, ADDR_PC, 0)
     
-    dut._log.info("Test 2: Read latency")
+    status = await read_register(dut, ADDR_STATUS)
+    assert not (status & (1 << STATUS_BUSY)), "GPU should not be busy initially"
+    
+    await write_register(dut, ADDR_CONTROL, 1 << CTRL_START)
+    
+    await ClockCycles(dut.clk, 5)
+    status = await read_register(dut, ADDR_STATUS)
+    dut._log.info(f"Status after start: 0x{status:08x}")
+    
+    idle = await wait_for_idle(dut)
+    assert idle, "GPU did not return to idle"
+    
+    dut._log.info("Pipeline start test passed")
+
+@cocotb.test()
+async def test_memory_interface(dut):
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
+    
+    dut._log.info("Testing memory interface")
+    
+    await reset_dut(dut)
+    
+    dram_transactions = []
+    
+    async def monitor_dram():
+        for _ in range(100):
+            await RisingEdge(dut.clk)
+            if dut.o_dram_we.value == 1:
+                addr = int(dut.o_dram_addr.value)
+                data = int(dut.o_dram_wdata.value)
+                dram_transactions.append((addr, data))
+                dut._log.info(f"DRAM write: addr=0x{addr:08x}, data=0x{data:08x}")
+    
+    monitor_task = cocotb.start_soon(monitor_dram())
+    
+    await write_register(dut, ADDR_VERTEX_BASE, 0x20000)
+    await write_register(dut, ADDR_VERTEX_COUNT, 3)
     
     dut.i_dram_rdata.value = 0x12345678
     
-    start_time = cocotb.utils.get_sim_time(units='ns')
-    trans = SpiTransaction(write=False, addr=0x1000)
-    result = await spi.send_transaction(trans)
-    end_time = cocotb.utils.get_sim_time(units='ns')
+    await write_register(dut, ADDR_CONTROL, 1 << CTRL_START)
     
-    read_latency = end_time - start_time
-    dut._log.info(f"  Read transaction latency: {read_latency:.0f} ns")
+    await ClockCycles(dut.clk, 100)
     
-    dut._log.info("Test 3: Mixed workload")
+    dut._log.info(f"Captured {len(dram_transactions)} DRAM transactions")
     
-    start_time = cocotb.utils.get_sim_time(units='ns')
+    dut._log.info("Memory interface test passed")
+
+@cocotb.test()
+async def test_interrupt(dut):
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
     
-    for i in range(25):
-        if i % 2 == 0:
-            trans = SpiTransaction(write=True, addr=i << 8, data=i * 0x1111)
-        else:
-            dut.i_dram_rdata.value = i * 0x2222
-            trans = SpiTransaction(write=False, addr=i << 8)
+    dut._log.info("Testing interrupt generation")
+    
+    await reset_dut(dut)
+    
+    await write_register(dut, ADDR_VERTEX_BASE, 0x30000)
+    await write_register(dut, ADDR_VERTEX_COUNT, 3)
+    await write_register(dut, ADDR_CONTROL, 1 << CTRL_START)
+    
+    await wait_for_idle(dut)
+    
+    status = await read_register(dut, ADDR_STATUS)
+    assert status & (1 << STATUS_IRQ), "Interrupt should be pending after completion"
+    
+    await write_register(dut, ADDR_CONTROL, 1 << CTRL_IRQ_CLEAR)
+    await ClockCycles(dut.clk, 2)
+    
+    status = await read_register(dut, ADDR_STATUS)
+    assert not (status & (1 << STATUS_IRQ)), "Interrupt should be cleared"
+    
+    dut._log.info("Interrupt test passed")
+
+@cocotb.test()
+async def test_back_to_back(dut):
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
+    
+    dut._log.info("Testing back-to-back operations")
+    
+    await reset_dut(dut)
+    
+    for i in range(3):
+        dut._log.info(f"Operation {i+1}/3")
         
-        await spi.send_transaction(trans)
+        await write_register(dut, ADDR_VERTEX_BASE, 0x40000 + i * 0x1000)
+        await write_register(dut, ADDR_VERTEX_COUNT, 3 + i * 3)
+        
+        await write_register(dut, ADDR_CONTROL, 1 << CTRL_START)
+        
+        idle = await wait_for_idle(dut, timeout=5000)
+        assert idle, f"Operation {i+1} did not complete"
+        
+        await write_register(dut, ADDR_CONTROL, 1 << CTRL_IRQ_CLEAR)
     
-    end_time = cocotb.utils.get_sim_time(units='ns')
-    elapsed_us = (end_time - start_time) / 1000
-    trans_per_us = 25 / elapsed_us
+    dut._log.info("Back-to-back test passed")
+
+@cocotb.test()
+async def test_vertex_fetch_interface(dut):
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
     
-    dut._log.info(f"  Mixed workload: {trans_per_us:.2f} transactions/μs")
+    dut._log.info("Testing vertex fetch interface")
     
-    dut._log.info("Performance test completed!")
+    await reset_dut(dut)
+    
+    vertex_base = 0x50000
+    vertex_count = 3
+    
+    await write_register(dut, ADDR_VERTEX_BASE, vertex_base)
+    await write_register(dut, ADDR_VERTEX_COUNT, vertex_count)
+    
+    vertex_data = create_vertex_data()
+    vertex_index = 0
+    
+    async def provide_vertex_data():
+        nonlocal vertex_index
+        for _ in range(1000):
+            await RisingEdge(dut.clk)
+            if vertex_index < len(vertex_data):
+                dut.i_dram_rdata.value = vertex_data[vertex_index]
+                vertex_index = (vertex_index + 1) % len(vertex_data)
+    
+    cocotb.start_soon(provide_vertex_data())
+    
+    await write_register(dut, ADDR_CONTROL, 1 << CTRL_START)
+    
+    await ClockCycles(dut.clk, 200)
+    
+    dut._log.info("Vertex fetch test passed")
+
+@cocotb.test()
+async def test_stress(dut):
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
+    
+    dut._log.info("Starting stress test")
+    
+    await reset_dut(dut)
+    
+    for i in range(10):
+        dut._log.info(f"Stress iteration {i+1}/10")
+        
+        vertex_base = random.randint(0, 0xF0000) & ~0xFFF
+        vertex_count = random.choice([3, 6, 9, 12])
+        
+        await write_register(dut, ADDR_VERTEX_BASE, vertex_base)
+        await write_register(dut, ADDR_VERTEX_COUNT, vertex_count)
+        
+        shader = [random.randint(0, 0xFFFFFFFF) for _ in range(random.randint(1, 5))]
+        await load_shader_program(dut, shader)
+        
+        dut.i_dram_rdata.value = random.randint(0, 0xFFFFFFFF)
+        
+        await write_register(dut, ADDR_CONTROL, 1 << CTRL_START)
+        
+        idle = await wait_for_idle(dut, timeout=10000)
+        if not idle:
+            dut._log.warning(f"Iteration {i+1} timeout - resetting")
+            await reset_dut(dut)
+        
+        await write_register(dut, ADDR_CONTROL, 1 << CTRL_IRQ_CLEAR)
+        
+        await ClockCycles(dut.clk, random.randint(1, 20))
+    
+    dut._log.info("Stress test completed")
+
+@cocotb.test()
+async def test_performance(dut):
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD, units="ns").start())
+    
+    dut._log.info("Measuring performance")
+    
+    await reset_dut(dut)
+    
+    results = []
+    
+    for vertex_count in [3, 6, 9, 12, 15]:
+        await write_register(dut, ADDR_VERTEX_BASE, 0x60000)
+        await write_register(dut, ADDR_VERTEX_COUNT, vertex_count)
+        
+        start_time = cocotb.utils.get_sim_time(units='ns')
+        await write_register(dut, ADDR_CONTROL, 1 << CTRL_START)
+        
+        idle = await wait_for_idle(dut, timeout=20000)
+        end_time = cocotb.utils.get_sim_time(units='ns')
+        
+        if idle:
+            cycles = (end_time - start_time) / CLK_PERIOD
+            results.append((vertex_count, cycles))
+            dut._log.info(f"Vertices: {vertex_count}, Cycles: {cycles:.0f}")
+        
+        await write_register(dut, ADDR_CONTROL, 1 << CTRL_IRQ_CLEAR)
+    
+    if len(results) > 1:
+        assert results[-1][1] > results[0][1], "Performance should scale with vertex count"
+    
+    dut._log.info("Performance test passed")

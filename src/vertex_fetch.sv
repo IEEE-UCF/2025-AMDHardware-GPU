@@ -25,6 +25,7 @@ module vertex_fetch #(
   typedef enum logic [1:0] {
     IDLE,
     FETCH,
+    WAIT_MEM,
     DONE
   } state_t;
   state_t current_state, next_state;
@@ -48,7 +49,11 @@ module vertex_fetch #(
       IDLE: if (i_start_fetch) next_state = FETCH;
       FETCH: begin
         o_mem_req = 1'b1;
-        if (i_mem_ready) next_state = DONE;
+        if (i_mem_ready) next_state = WAIT_MEM;
+      end
+      WAIT_MEM: begin
+        o_fetch_done = 1'b1;
+        next_state   = DONE;
       end
       DONE: begin
         o_fetch_done = 1'b1;
