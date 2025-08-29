@@ -32,6 +32,7 @@ TOPLEVEL_LANG = verilog
 
 # TOPLEVEL = fragment_shader
 # MODULE = fragment_shader_tb
+<<<<<<< HEAD
 
  # TOPLEVEL = controller
 #  MODULE = controller_tb
@@ -44,5 +45,10 @@ TOPLEVEL_LANG = verilog
 
 # TOPLEVEL = gpu_top
 # MODULE = gpu_top_tb
+=======
+>>>>>>> c8b7716 (stuff)
 
-include $(shell cocotb-config --makefiles)/Makefile.sim
+TOPLEVEL = rasterizer
+MODULE = rasterizer_tb
+
+include /home/quil/Documents/GitRepos/2025-AMDHardware-GPU/.cocotbvenv/lib/python3.13/site-packages/cocotb/share/makefiles/Makefile.sim
