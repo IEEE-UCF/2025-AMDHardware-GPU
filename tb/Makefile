@@ -34,8 +34,8 @@ TOPLEVEL_LANG = verilog
 # MODULE = fragment_shader_tb
 <<<<<<< HEAD
 
- # TOPLEVEL = controller
-#  MODULE = controller_tb
+ TOPLEVEL = controller
+ MODULE = controller_tb
 
 # TOPLEVEL = framebuffer
 # MODULE = framebuffer_tb

@@ -43,7 +43,7 @@ async def test_shader_pipeline(dut):
 
     await reset_dut(dut)
 
-    num_tests = 100
+    num_tests = 1000
     dut._log.info(f"Running {num_tests} randomized fragment tests...")
 
     for test_num in range(num_tests):

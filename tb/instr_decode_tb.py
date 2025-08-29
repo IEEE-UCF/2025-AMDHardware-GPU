@@ -4,7 +4,6 @@ import random
 
 @cocotb.test()
 async def test_instruction_decoder(dut):
-    """Test the instruction decoder with various instruction words and track coverage."""
 
     # Coverage tracking
     opcode_coverage = set()
