@@ -112,7 +112,7 @@ spi_to_parallel_bridge:
 
 .PHONY: texture_unit
 texture_unit:
-	$(MAKE) TOPLEVEL=texture_unit MODULE=tecture_tb SIM_BUILD=sim_build_texture_unit
+	$(MAKE) TOPLEVEL=texture_unit MODULE=texture_tb SIM_BUILD=sim_build_texture_unit
 
 .PHONY: vertex_fetch
 vertex_fetch:
