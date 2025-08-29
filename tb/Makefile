@@ -16,6 +16,11 @@ VERILOG_SOURCES += $(shell pwd)/../src/shader_loader.sv
 VERILOG_SOURCES += $(shell pwd)/../src/spi_to_parallel_bridge.sv
 VERILOG_SOURCES += $(shell pwd)/../src/texture_unit.sv
 VERILOG_SOURCES += $(shell pwd)/../src/vertex_fetch.sv
+VERILOG_SOURCES += $(shell pwd)/../rtl_utils/reset_sync.sv
+VERILOG_SOURCES += $(shell pwd)/../rtl_utils/arbiter.sv
+VERILOG_SOURCES += $(shell pwd)/../rtl_utils/fifo.sv
+VERILOG_SOURCES += $(shell pwd)/../rtl_utils/clock_divider.sv
+VERILOG_SOURCES += $(shell pwd)/../rtl_utils/mux_n.sv
 
 TOPLEVEL_LANG = verilog
 
@@ -25,7 +30,19 @@ TOPLEVEL_LANG = verilog
 # TOPLEVEL = attribute_interpolator
 # MODULE = attribute_interpolator_tb
 
-TOPLEVEL = fragment_shader
-MODULE = fragment_shader_tb
+# TOPLEVEL = fragment_shader
+# MODULE = fragment_shader_tb
+
+ # TOPLEVEL = controller
+#  MODULE = controller_tb
+
+# TOPLEVEL = framebuffer
+# MODULE = framebuffer_tb
+
+# TOPLEVEL = gpu_register_file
+# MODULE = gpu_reg_tb
+
+# TOPLEVEL = gpu_top
+# MODULE = gpu_top_tb
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

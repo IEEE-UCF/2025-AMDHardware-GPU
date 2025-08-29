@@ -14,15 +14,19 @@ module arbiter #(
     logic [NUM_REQUESTERS*2-1:0] masked_requests;
 
     always_comb begin
+        logic grant_found;
+
         next_grant_state = '0;
+        grant_found = 1'b0; // Initialize the flag to 0
+
         // duplicating the request vector avoids tricky wrap around logic
         masked_requests = {i_requests, i_requests} & priority_mask;
 
         if (|i_requests) begin
             for (int i = 0; i < NUM_REQUESTERS * 2; i++) begin
-                if (masked_requests[i]) begin
+                if (masked_requests[i] && !grant_found) begin
                     next_grant_state[i % NUM_REQUESTERS] = 1'b1;
-                    break;
+                    grant_found = 1'b1; // set the flag to 1 to block other grants
                 end
             end
         end

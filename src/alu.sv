@@ -8,22 +8,22 @@ module alu #(
     output logic [VECTOR_SIZE-1:0][DATA_WIDTH-1:0] o_result
 );
 
-  // little note, its a combinational alu so the result is instant
-  always_comb begin
-    o_result = '0;  // default prevents latches
+    always_comb begin
+        o_result = '0;
 
-    case (i_opcode)
-      5'b00001: o_result = i_operand_a + i_operand_b;
-      5'b00010: o_result = i_operand_a - i_operand_b;
-      5'b00011: o_result = i_operand_a * i_operand_b;
-      5'b01001: o_result = i_operand_a & i_operand_b;
-      5'b01010: o_result = i_operand_a | i_operand_b;
-      5'b01011: o_result = i_operand_a ^ i_operand_b;
-      5'b10001: o_result = i_operand_a;
-      5'b10010: o_result = i_operand_b;
-      default:  o_result = '0;
-    endcase
-  end
+        for (int i = 0; i < VECTOR_SIZE; i++) begin
+            case (i_opcode)
+                5'b00001: o_result[i] = i_operand_a[i] + i_operand_b[i];
+                5'b00010: o_result[i] = i_operand_a[i] - i_operand_b[i];
+                5'b00011: o_result[i] = i_operand_a[i] * i_operand_b[i];
+                5'b01001: o_result[i] = i_operand_a[i] & i_operand_b[i];
+                5'b01010: o_result[i] = i_operand_a[i] | i_operand_b[i];
+                5'b01011: o_result[i] = i_operand_a[i] ^ i_operand_b[i];
+                5'b10001: o_result[i] = i_operand_a[i];
+                5'b10010: o_result[i] = i_operand_b[i];
+                default:  o_result[i] = '0;
+            endcase
+        end
+    end
 
 endmodule
-

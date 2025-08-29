@@ -1,3 +1,4 @@
+# tb/alu_tb.py
 import cocotb
 import random
 from cocotb.triggers import Timer
@@ -6,91 +7,73 @@ from cocotb.binary import BinaryValue
 
 @cocotb.test()
 async def test_alu(dut):
-    pack = lambda vec: sum(
-        (int(v) & MAXVAL) << (i * data_width) for i, v in enumerate(vec)
-    )
-    unpack = lambda bits: [
-        (bits >> (i * data_width)) & MAXVAL for i in range(vector_size)
-    ]
-    valid_opcodes = [
-        0b00001,
-        0b00010,
-        0b00011,
-        0b01001,
-        0b01010,
-        0b01011,
-        0b10001,
-        0b10010,
-    ]
-    data_width = dut.DATA_WIDTH.value
-    vector_size = dut.VECTOR_SIZE.value
-    MAXVAL = (1 << data_width) - 1  # for easier use later on
+    data_width = int(dut.DATA_WIDTH.value)
+    vector_size = int(dut.VECTOR_SIZE.value)
+    MAXVAL = (1 << data_width) - 1
 
-    test_opcodes = valid_opcodes + [
-        0b00000
-    ]  # adding an invalid opcode to test default case
+    def pack(vec):
+        return sum((int(v) & MAXVAL) << (i * data_width) for i, v in enumerate(vec))
+
+    def unpack(bits):
+        return [ (bits >> (i * data_width)) & MAXVAL for i in range(vector_size) ]
+
+    def add_w(a, b): return (a + b) & MAXVAL
+    def sub_w(a, b): return (a - b) & MAXVAL
+    def mul_w(a, b): return (a * b) & MAXVAL
+
+    valid_opcodes = [
+        0b00001, # add
+        0b00010, # sub
+        0b00011, # mul
+        0b01001, # and
+        0b01010, # or
+        0b01011, # xor
+        0b10001, # mov a
+        0b10010, # mov b
+    ]
+    test_opcodes = valid_opcodes + [0b00000]
 
     dut._log.info("---- ALU TEST STARTS HERE ----")
-
-    num_iterations = 10000
-    dut._log.info(f"Running {num_iterations} tests on ALU...")
+    num_iterations = 10_000
 
     for i in range(num_iterations):
-        # choose a random opcode
         opcode = random.choice(test_opcodes)
         op_a = [random.randint(0, MAXVAL) for _ in range(vector_size)]
         op_b = [random.randint(0, MAXVAL) for _ in range(vector_size)]
 
-        packed_a = BinaryValue(n_bits=vector_size * data_width, bigEndian=False)
-        packed_b = BinaryValue(n_bits=vector_size * data_width, bigEndian=False)
-
-        for k in range(vector_size):
-            packed_a[(k + 1) * data_width - 1 : k * data_width] = op_a[k]
-            packed_b[(k + 1) * data_width - 1 : k * data_width] = op_b[k]
-
         dut.i_opcode.value = opcode
-        dut.i_operand_a.value = packed_a
-        dut.i_operand_b.value = packed_b
+        dut.i_operand_a.value = pack(op_a)
+        dut.i_operand_b.value = pack(op_b)
 
         await Timer(1, units="ns")
 
         dut_result = unpack(int(dut.o_result.value))
 
-        # Calculating the expected result
-        expected_results = []
+        expected = []
         for j in range(vector_size):
-            expected_val = 0
-            match opcode:
-                case 0b00001:
-                    expected_val = op_a[j] + op_b[j]
-                case 0b00010:
-                    expected_val = op_a[j] - op_b[j]
-                case 0b00011:
-                    expected_val = op_a[j] * op_b[j]
-                case 0b01001:
-                    expected_val = op_a[j] & op_b[j]
-                case 0b01010:
-                    expected_val = op_a[j] | op_b[j]
-                case 0b01011:
-                    expected_val = op_a[j] ^ op_b[j]
-                case 0b10001:
-                    expected_val = op_a[j]
-                case 0b10010:
-                    expected_val = op_b[j]
-                case _:
-                    expected_val = 0
+            a = op_a[j]
+            b = op_b[j]
+            if opcode == 0b00001: val = add_w(a, b)
+            elif opcode == 0b00010: val = sub_w(a, b)
+            elif opcode == 0b00011: val = mul_w(a, b)
+            elif opcode == 0b01001: val = a & b
+            elif opcode == 0b01010: val = a | b
+            elif opcode == 0b01011: val = a ^ b
+            elif opcode == 0b10001: val = a
+            elif opcode == 0b10010: val = b
+            else: val = 0
+            expected.append(val)
 
-            expected_results.append(expected_val & MAXVAL)
+        if dut_result != expected:
+            for j in range(vector_size):
+                if dut_result[j] != expected[j]:
+                    dut._log.error(f"Mismatch in lane {j} on iteration {i+1}:")
+                    dut._log.error(f" Opcode: {opcode:05b}")
+                    dut._log.error(f" Operand A[{j}]: {op_a[j]}")
+                    dut._log.error(f" Operand B[{j}]: {op_b[j]}")
+                    dut._log.error(f" DUT Result[{j}]: {dut_result[j]}")
+                    dut._log.error(f" Expected Result[{j}]: {expected[j]}")
+            
+            assert False, f"ALU mismatch detected on iteration {i+1}. See logs for details."
 
-        dut._log.info(f"Test Iteration {i + 1}:")
-        dut._log.info(f"    Opcode: {opcode:05b}")
-        dut._log.info(f"    Operand A: {op_a}")
-        dut._log.info(f"    Operand B: {op_b}")
-        dut._log.info(f"    DUT Result: {dut_result}")
-        dut._log.info(f"    Expected: {expected_results}")
-
-        assert dut_result == expected_results, (
-            f"Mismatch on iteration {i + 1}!, DUT Returned {dut_result} while it expected {expected_results} using opcode {opcode:05b}!!!!"
-        )
-
-    dut._log.info(f"--- TEST FINISHED ---")
+    dut._log.info(f"--- ALU TEST FINISHED: {num_iterations} vectors, all matched ---")

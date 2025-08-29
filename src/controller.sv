@@ -1,66 +1,93 @@
-module controller (
-    input logic clk,
-    input logic rst_n,
+module controller #(
+    parameter int QUEUE_DEPTH = 16
+) (
+    input  logic        clk,
+    input  logic        rst_n,
 
-    input logic i_instruction_valid,
-    input logic i_memory_ready,
+    input  logic [31:0] i_bus_addr,
+    input  logic [31:0] i_bus_wdata,
+    input  logic        i_bus_we,
+    output logic [31:0] o_bus_rdata,
 
-    output logic o_pc_we,
-    output logic o_decode_en,
-    output logic o_execute_en,
-    output logic o_memory_en,
-    output logic o_writeback_en,
-    output logic o_hazard_stall
+    input  logic        i_pipeline_busy,
+    output logic        o_start_pipeline,
+
+    output logic        o_irq
 );
-  // the way im going to do this is a lil weird so stay with me here..
-  typedef enum logic [2:0] {
-    FETCH,
-    DECODE,
-    EXECUTE,
-    MEMORY,
-    WRITEBACK
-  } pipeline_state_t;
 
-  pipeline_state_t current_state, next_state;
+    localparam ADDR_CONTROL = 32'h00;
+    localparam ADDR_STATUS  = 32'h04;
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      current_state <= FETCH;
-    end else begin
-      current_state <= next_state;
-    end
-  end
+    localparam CTRL_START_BIT     = 0;
+    localparam CTRL_IRQ_CLEAR_BIT = 1;
 
-  always_comb begin
-    next_state = current_state;
-    o_hazard_stall = 1'b0;
+    localparam STATUS_BUSY_BIT          = 0;
+    localparam STATUS_IRQ_PENDING_BIT   = 1;
+    localparam STATUS_QUEUE_PENDING_BIT = 2;
+    localparam STATUS_QUEUE_COUNT_LOW   = 4;
+    localparam STATUS_QUEUE_COUNT_HIGH  = STATUS_QUEUE_COUNT_LOW + $clog2(QUEUE_DEPTH) - 1;
 
-    case (current_state)
-      FETCH: begin
-        if (i_instruction_valid) next_state = DECODE;
-      end
-      DECODE: begin
-        // stall until memory signals ready
-        if (!i_memory_ready) begin
-          o_hazard_stall = 1'b1;
-          next_state = DECODE;
+    logic start_cmd;
+    logic irq_clear_cmd;
+    logic irq_pending;
+    logic busy_last_cycle;
+    logic fire_start_pulse;
+
+    logic [$clog2(QUEUE_DEPTH)-1:0] pending_starts_count;
+
+    assign start_cmd     = i_bus_we && (i_bus_addr == ADDR_CONTROL) && i_bus_wdata[CTRL_START_BIT];
+    assign irq_clear_cmd = i_bus_we && (i_bus_addr == ADDR_CONTROL) && i_bus_wdata[CTRL_IRQ_CLEAR_BIT];
+
+    assign fire_start_pulse = (pending_starts_count > 0 || start_cmd) && !i_pipeline_busy;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            o_start_pipeline <= 1'b0;
         end else begin
-          next_state = EXECUTE;
+            o_start_pipeline <= fire_start_pulse;
         end
-      end
-      EXECUTE: next_state = MEMORY;
-      MEMORY: if (i_memory_ready) next_state = WRITEBACK;
-      WRITEBACK: next_state = FETCH;
-      default: next_state = FETCH;
-    endcase
-  end
+    end
 
-  // this generates control signals based on the current state
-  assign o_pc_we = (current_state == WRITEBACK);
-  assign o_decode_en = (current_state == FETCH) && i_instruction_valid;
-  assign o_execute_en = (current_state == DECODE) && !o_hazard_stall;
-  assign o_memory_en = (current_state == EXECUTE);
-  assign o_writeback_en = (current_state == MEMORY) && i_memory_ready;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            pending_starts_count <= '0;
+        end else begin
+            if (start_cmd && fire_start_pulse) begin
+                pending_starts_count <= pending_starts_count;
+            end else if (fire_start_pulse) begin
+                pending_starts_count <= pending_starts_count - 1;
+            end else if (start_cmd) begin
+                if (pending_starts_count < QUEUE_DEPTH - 1) begin
+                    pending_starts_count <= pending_starts_count + 1;
+                end
+            end
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            irq_pending     <= 1'b0;
+            busy_last_cycle <= 1'b0;
+        end else begin
+            busy_last_cycle <= i_pipeline_busy;
+            if (busy_last_cycle && !i_pipeline_busy) begin
+                irq_pending <= 1'b1;
+            end else if (irq_clear_cmd) begin
+                irq_pending <= 1'b0;
+            end
+        end
+    end
+
+    always_comb begin
+        o_bus_rdata = '0;
+        if (i_bus_addr == ADDR_STATUS) begin
+            o_bus_rdata[STATUS_BUSY_BIT]          = i_pipeline_busy;
+            o_bus_rdata[STATUS_IRQ_PENDING_BIT]   = irq_pending;
+            o_bus_rdata[STATUS_QUEUE_PENDING_BIT] = (pending_starts_count > 0);
+            o_bus_rdata[STATUS_QUEUE_COUNT_HIGH:STATUS_QUEUE_COUNT_LOW] = pending_starts_count;
+        end
+    end
+
+    assign o_irq = irq_pending;
 
 endmodule
-
