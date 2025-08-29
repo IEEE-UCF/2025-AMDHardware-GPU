@@ -12,12 +12,14 @@ in
       python-with-my-packages
       libgcc
       gnumake
+			iverilog
       gtkwave
-      python312Packages.flask
       python312Packages.pip
     ];
     shellHook = ''
-      alias vivado="nix run gitlab:doronbehar/nix-xilinx#vivado"
-      pip3 install cocotb
+			python3 -m venv .cocotbvenv
+			source .cocotbvenv/bin/activate
+      pip3 install cocotb cocotb-bus pytest
+			cocotb-config --version
     '';
   }
