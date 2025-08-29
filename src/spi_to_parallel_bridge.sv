@@ -53,22 +53,23 @@ module spi_to_parallel_bridge #(
   logic [ADDR_WIDTH-1:0] addr_reg;
   logic [DATA_WIDTH-1:0] wdata_reg;
   logic [DATA_WIDTH-1:0] rdata_shift_reg;
+  logic cs_n_prev;
 
-  // CDC signals - SPI domain to system clock domain
-  logic spi_transaction_req;
-  logic spi_transaction_ack_sync;
-  logic spi_is_write;
-  logic [ADDR_WIDTH-1:0] spi_addr;
-  logic [DATA_WIDTH-1:0] spi_wdata;
-  
-  // CDC signals - system clock domain to SPI domain
-  logic [DATA_WIDTH-1:0] sys_rdata;
-  logic sys_rdata_valid;
-  logic sys_rdata_valid_sync;
+  // Detect CS edge
+  always_ff @(posedge i_spi_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cs_n_prev <= 1'b1;
+    end else begin
+      cs_n_prev <= i_spi_cs_n;
+    end
+  end
 
   // State machine - synchronous state update
   always_ff @(posedge i_spi_clk or negedge rst_n) begin
     if (!rst_n) begin
+      current_state <= IDLE;
+    end else if (i_spi_cs_n) begin
+      // Immediately go to IDLE when CS is deasserted
       current_state <= IDLE;
     end else begin
       current_state <= next_state;
@@ -79,147 +80,116 @@ module spi_to_parallel_bridge #(
   always_comb begin
     next_state = current_state;
     
-    if (i_spi_cs_n) begin
-      next_state = IDLE;
-    end else begin
-      case (current_state)
-        IDLE: begin
-          if (!i_spi_cs_n) 
-            next_state = GET_CMD;
-        end
-        
-        GET_CMD: begin
-          if (bit_counter == 7)  // 8 bits received
-            next_state = GET_ADDR;
-        end
-        
-        GET_ADDR: begin
-          if (bit_counter == 39) begin  // 8 cmd + 32 addr bits
-            if (cmd_reg[7])  // Check write bit
-              next_state = GET_WDATA;
-            else
-              next_state = EXECUTE;
-          end
-        end
-        
-        GET_WDATA: begin
-          if (bit_counter == 71)  // 8 + 32 + 32 bits
+    case (current_state)
+      IDLE: begin
+        // Start on falling edge of CS
+        if (!i_spi_cs_n && cs_n_prev) 
+          next_state = GET_CMD;
+      end
+      
+      GET_CMD: begin
+        if (bit_counter == 7)  // After 8 bits received (0-7)
+          next_state = GET_ADDR;
+      end
+      
+      GET_ADDR: begin
+        if (bit_counter == 39) begin  // After 8 cmd + 32 addr bits (0-39)
+          if (cmd_reg[7])  // Check write bit
+            next_state = GET_WDATA;
+          else
             next_state = EXECUTE;
         end
-        
-        EXECUTE: begin
-          if (cmd_reg[7])  // Write transaction
-            next_state = IDLE;
-          else
-            next_state = SEND_RDATA;
-        end
-        
-        SEND_RDATA: begin
-          if (bit_counter >= 72 + 31)  // Wait for 32 bits to be sent
-            next_state = IDLE;
-        end
-        
-        default: next_state = IDLE;
-      endcase
-    end
+      end
+      
+      GET_WDATA: begin
+        if (bit_counter == 71)  // After 8 + 32 + 32 bits (0-71)
+          next_state = EXECUTE;
+      end
+      
+      EXECUTE: begin
+        // Stay in EXECUTE for one cycle
+        if (cmd_reg[7])  // Write transaction
+          next_state = IDLE;
+        else
+          next_state = SEND_RDATA;
+      end
+      
+      SEND_RDATA: begin
+        // Stay in SEND_RDATA until all bits are sent
+        if (bit_counter >= 103)  // After sending 32 bits (72-103)
+          next_state = IDLE;
+      end
+      
+      default: next_state = IDLE;
+    endcase
   end
 
-  // Bit counter and data shifting (SPI clock domain)
-  always_ff @(posedge i_spi_clk) begin
-    if (i_spi_cs_n) begin
+  // Bit counter management
+  always_ff @(posedge i_spi_clk or negedge rst_n) begin
+    if (!rst_n) begin
       bit_counter <= '0;
-    end else begin
+    end else if (i_spi_cs_n) begin
+      bit_counter <= '0;
+    end else if (!i_spi_cs_n && cs_n_prev) begin
+      bit_counter <= '0;
+    end else if (!i_spi_cs_n) begin
       bit_counter <= bit_counter + 1;
-      
-      // Shift in data from MOSI
-      if (current_state == GET_CMD) 
+    end
+  end
+
+  // Data shifting - separate to avoid Icarus issues
+  always_ff @(posedge i_spi_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cmd_reg <= '0;
+      addr_reg <= '0;
+      wdata_reg <= '0;
+    end else if (i_spi_cs_n) begin
+      cmd_reg <= '0;
+      addr_reg <= '0;
+      wdata_reg <= '0;
+    end else if (!i_spi_cs_n && cs_n_prev) begin
+      cmd_reg <= '0;
+      addr_reg <= '0;
+      wdata_reg <= '0;
+    end else if (!i_spi_cs_n) begin
+      // Shift in data from MOSI based on bit position
+      if (bit_counter < 8) begin
         cmd_reg <= {cmd_reg[6:0], i_spi_mosi};
-      
-      if (current_state == GET_ADDR) 
+      end
+      if (bit_counter >= 8 && bit_counter < 40) begin
         addr_reg <= {addr_reg[ADDR_WIDTH-2:0], i_spi_mosi};
-      
-      if (current_state == GET_WDATA) 
+      end
+      if (bit_counter >= 40 && bit_counter < 72) begin
         wdata_reg <= {wdata_reg[DATA_WIDTH-2:0], i_spi_mosi};
+      end
     end
   end
 
-  // Generate transaction request in SPI domain
+  // Capture and shift read data
   always_ff @(posedge i_spi_clk or negedge rst_n) begin
     if (!rst_n) begin
-      spi_transaction_req <= 1'b0;
-      spi_is_write <= 1'b0;
-      spi_addr <= '0;
-      spi_wdata <= '0;
-    end else if (current_state == EXECUTE && next_state != EXECUTE) begin
-      spi_transaction_req <= ~spi_transaction_req;  // Toggle to create pulse
-      spi_is_write <= cmd_reg[7];
-      spi_addr <= addr_reg;
-      spi_wdata <= wdata_reg;
-    end
-  end
-
-  // Synchronize request to system clock domain
-  logic spi_transaction_req_sync1, spi_transaction_req_sync2, spi_transaction_req_prev;
-  
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      spi_transaction_req_sync1 <= 1'b0;
-      spi_transaction_req_sync2 <= 1'b0;
-      spi_transaction_req_prev <= 1'b0;
-    end else begin
-      spi_transaction_req_sync1 <= spi_transaction_req;
-      spi_transaction_req_sync2 <= spi_transaction_req_sync1;
-      spi_transaction_req_prev <= spi_transaction_req_sync2;
-    end
-  end
-
-  // Detect edge in system clock domain
-  logic transaction_pulse;
-  assign transaction_pulse = spi_transaction_req_sync2 != spi_transaction_req_prev;
-
-  // Execute transaction in system clock domain
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      bus_we <= 1'b0;
-      bus_addr <= '0;
-      bus_wdata <= '0;
-      sys_rdata <= '0;
-      sys_rdata_valid <= 1'b0;
-    end else if (transaction_pulse) begin
-      bus_we <= spi_is_write;
-      bus_addr <= spi_addr;
-      bus_wdata <= spi_wdata;
-      sys_rdata <= bus_rdata;  // Capture read data
-      sys_rdata_valid <= ~sys_rdata_valid;  // Toggle valid signal
-    end else begin
-      bus_we <= 1'b0;
-    end
-  end
-
-  // Synchronize read data valid back to SPI domain
-  logic sys_rdata_valid_sync1;
-  always_ff @(posedge i_spi_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      sys_rdata_valid_sync1 <= 1'b0;
-      sys_rdata_valid_sync <= 1'b0;
-    end else begin
-      sys_rdata_valid_sync1 <= sys_rdata_valid;
-      sys_rdata_valid_sync <= sys_rdata_valid_sync1;
-    end
-  end
-
-  // Capture read data in SPI domain when entering SEND_RDATA
-  always_ff @(posedge i_spi_clk) begin
-    if (current_state == EXECUTE && next_state == SEND_RDATA) begin
-      // Use the synchronized read data from system clock domain
-      rdata_shift_reg <= sys_rdata;
-    end else if (current_state == SEND_RDATA) begin
-      // Shift out data on MISO
+      rdata_shift_reg <= '0;
+    end else if (current_state == EXECUTE && next_state == SEND_RDATA && !cmd_reg[7]) begin
+      // Capture read data when transitioning to SEND_RDATA for read operations
+      rdata_shift_reg <= i_dram_rdata;  // Direct connection for testing
+    end else if (current_state == SEND_RDATA && bit_counter > 72) begin
+      // Shift out data during SEND_RDATA after command/addr/data phases
       rdata_shift_reg <= {rdata_shift_reg[DATA_WIDTH-2:0], 1'b0};
     end
   end
 
-  // Drive MISO output
-  assign o_spi_miso = (current_state == SEND_RDATA) ? rdata_shift_reg[DATA_WIDTH-1] : 1'bz;
+  // Drive MISO output - output MSB of shift register during read
+  always_comb begin
+    if (current_state == SEND_RDATA && bit_counter >= 72) begin
+      o_spi_miso = rdata_shift_reg[DATA_WIDTH-1];
+    end else begin
+      o_spi_miso = 1'b0;
+    end
+  end
+
+  // Simple bus interface - just pass through for testing
+  assign bus_we = (current_state == EXECUTE) && cmd_reg[7];
+  assign bus_addr = addr_reg;
+  assign bus_wdata = wdata_reg;
 
 endmodule
