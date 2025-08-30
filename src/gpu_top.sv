@@ -55,9 +55,10 @@ module gpu_top #(
 
   // Control registers
   logic [ADDR_WIDTH-1:0] vertex_base_addr;
-  logic [15:0] vertex_count;
-  logic [15:0] current_vertex;
-  logic [$clog2(INSTR_DEPTH)-1:0] shader_pc;
+  logic [15:0]           vertex_count;
+  logic [15:0]           current_vertex;
+  // program counter is 32 bits for bus access, lower bits index instruction memory
+  logic [31:0]           shader_pc;
   
   // Pipeline control
   pipeline_state_t pipe_state, next_pipe_state;
@@ -84,6 +85,7 @@ module gpu_top #(
 
   // Shader signals
   logic [INSTR_WIDTH-1:0] shader_instruction;
+  logic [INSTR_WIDTH-1:0] shader_host_rdata;
   logic shader_exec_en;
   logic [4:0] shader_opcode;
   logic [3:0] shader_rd, shader_rs1, shader_rs2;
@@ -132,8 +134,8 @@ module gpu_top #(
   always_ff @(posedge clk or negedge glbl_rst_n) begin
     if (!glbl_rst_n) begin
       vertex_base_addr <= '0;
-      vertex_count <= '0;
-      shader_pc <= '0;
+      vertex_count     <= '0;
+      shader_pc        <= '0;
       controller_start <= 1'b0;
     end else begin
       controller_start <= 1'b0;  // Single cycle pulse
@@ -143,9 +145,9 @@ module gpu_top #(
           ADDR_CONTROL: begin
             if (i_bus_wdata[0]) controller_start <= 1'b1;
           end
-          ADDR_VERTEX_BASE: vertex_base_addr <= i_bus_wdata;
-          ADDR_VERTEX_COUNT: vertex_count <= i_bus_wdata[15:0];
-          ADDR_PC: shader_pc <= i_bus_wdata[$clog2(INSTR_DEPTH)-1:0];
+          ADDR_VERTEX_BASE:  vertex_base_addr <= i_bus_wdata;
+          ADDR_VERTEX_COUNT: vertex_count     <= i_bus_wdata[15:0];
+          ADDR_PC:           shader_pc        <= i_bus_wdata;
         endcase
       end
     end
@@ -153,14 +155,18 @@ module gpu_top #(
   
   // CPU read path
   always_comb begin
-    o_bus_rdata = '0;
-    case (i_bus_addr)
-      ADDR_STATUS: o_bus_rdata = {30'b0, controller_irq, pipeline_busy};
-      ADDR_VERTEX_BASE: o_bus_rdata = vertex_base_addr;
-      ADDR_VERTEX_COUNT: o_bus_rdata = {16'b0, vertex_count};
-      ADDR_PC: o_bus_rdata = {{(32-$clog2(INSTR_DEPTH)){1'b0}}, shader_pc};
-      default: o_bus_rdata = '0;
-    endcase
+    if (i_bus_addr >= ADDR_SHADER_BASE) begin
+      o_bus_rdata = shader_host_rdata;
+    end else begin
+      o_bus_rdata = '0;
+      case (i_bus_addr)
+        ADDR_STATUS:       o_bus_rdata = {30'b0, controller_irq, pipeline_busy};
+        ADDR_VERTEX_BASE:  o_bus_rdata = vertex_base_addr;
+        ADDR_VERTEX_COUNT: o_bus_rdata = {16'b0, vertex_count};
+        ADDR_PC:           o_bus_rdata = shader_pc;
+        default:           o_bus_rdata = '0;
+      endcase
+    end
   end
 
   assign pipeline_busy = (pipe_state != PIPE_IDLE);
@@ -239,7 +245,8 @@ module gpu_top #(
     .i_host_we    (i_bus_we && i_bus_addr >= ADDR_SHADER_BASE),
     .i_host_addr  (i_bus_addr[$clog2(INSTR_DEPTH)-1+2:2]),  // Word addressing
     .i_host_wdata (i_bus_wdata),
-    .i_gpu_addr   (shader_pc),
+    .o_host_rdata (shader_host_rdata),
+    .i_gpu_addr   (shader_pc[$clog2(INSTR_DEPTH)-1:0]),
     .o_gpu_instr  (shader_instruction)
   );
   

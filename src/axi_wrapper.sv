@@ -1,33 +1,39 @@
-
-module gpu_axi_wrapper #(
+module axi_wrapper #(
     parameter integer C_S_AXI_DATA_WIDTH = 32,
     parameter integer C_S_AXI_ADDR_WIDTH = 32,
     parameter integer C_M_AXI_DATA_WIDTH = 32,
     parameter integer C_M_AXI_ADDR_WIDTH = 32,
     parameter integer C_M_AXI_ID_WIDTH = 4
 )(
+    // AXI4-Lite Slave Interface (for control registers)
     input  wire                                  s_axi_aclk,
     input  wire                                  s_axi_aresetn,
+    // Write address channel
     input  wire [C_S_AXI_ADDR_WIDTH-1:0]        s_axi_awaddr,
     input  wire [2:0]                           s_axi_awprot,
     input  wire                                  s_axi_awvalid,
     output wire                                  s_axi_awready,
+    // Write data channel
     input  wire [C_S_AXI_DATA_WIDTH-1:0]        s_axi_wdata,
     input  wire [(C_S_AXI_DATA_WIDTH/8)-1:0]    s_axi_wstrb,
     input  wire                                  s_axi_wvalid,
     output wire                                  s_axi_wready,
+    // Write response channel
     output wire [1:0]                           s_axi_bresp,
     output wire                                  s_axi_bvalid,
     input  wire                                  s_axi_bready,
+    // Read address channel
     input  wire [C_S_AXI_ADDR_WIDTH-1:0]        s_axi_araddr,
     input  wire [2:0]                           s_axi_arprot,
     input  wire                                  s_axi_arvalid,
     output wire                                  s_axi_arready,
+    // Read data channel
     output wire [C_S_AXI_DATA_WIDTH-1:0]        s_axi_rdata,
     output wire [1:0]                           s_axi_rresp,
     output wire                                  s_axi_rvalid,
     input  wire                                  s_axi_rready,
     
+    // AXI4 Master Interface (for DDR access)
     output wire [C_M_AXI_ID_WIDTH-1:0]          m_axi_awid,
     output wire [C_M_AXI_ADDR_WIDTH-1:0]        m_axi_awaddr,
     output wire [7:0]                           m_axi_awlen,
@@ -39,15 +45,18 @@ module gpu_axi_wrapper #(
     output wire [3:0]                           m_axi_awqos,
     output wire                                  m_axi_awvalid,
     input  wire                                  m_axi_awready,
+    // Master write data
     output wire [C_M_AXI_DATA_WIDTH-1:0]        m_axi_wdata,
     output wire [(C_M_AXI_DATA_WIDTH/8)-1:0]    m_axi_wstrb,
     output wire                                  m_axi_wlast,
     output wire                                  m_axi_wvalid,
     input  wire                                  m_axi_wready,
+    // Master write response
     input  wire [C_M_AXI_ID_WIDTH-1:0]          m_axi_bid,
     input  wire [1:0]                           m_axi_bresp,
     input  wire                                  m_axi_bvalid,
     output wire                                  m_axi_bready,
+    // Master read address
     output wire [C_M_AXI_ID_WIDTH-1:0]          m_axi_arid,
     output wire [C_M_AXI_ADDR_WIDTH-1:0]        m_axi_araddr,
     output wire [7:0]                           m_axi_arlen,
@@ -59,6 +68,7 @@ module gpu_axi_wrapper #(
     output wire [3:0]                           m_axi_arqos,
     output wire                                  m_axi_arvalid,
     input  wire                                  m_axi_arready,
+    // Master read data
     input  wire [C_M_AXI_ID_WIDTH-1:0]          m_axi_rid,
     input  wire [C_M_AXI_DATA_WIDTH-1:0]        m_axi_rdata,
     input  wire [1:0]                           m_axi_rresp,
@@ -67,6 +77,7 @@ module gpu_axi_wrapper #(
     output wire                                  m_axi_rready
 );
 
+    // Internal signals
     logic                               clk;
     logic                               rst_n;
     logic                               bus_we;
@@ -84,6 +95,11 @@ module gpu_axi_wrapper #(
     assign clk = s_axi_aclk;
     assign rst_n = s_axi_aresetn;
 
+    //==========================================================================
+    // AXI4-Lite Slave Interface (Control/Status Registers)
+    //==========================================================================
+    
+    // AXI write state machine
     typedef enum logic [1:0] {
         WR_IDLE,
         WR_ADDR,
@@ -134,15 +150,25 @@ module gpu_axi_wrapper #(
     assign s_axi_awready = (wr_state == WR_IDLE) || (wr_state == WR_ADDR);
     assign s_axi_wready = (wr_state == WR_IDLE) || (wr_state == WR_DATA);
     assign s_axi_bvalid = (wr_state == WR_RESP);
-    assign s_axi_bresp = 2'b00;
+    assign s_axi_bresp = 2'b00; // OKAY response
     
-    assign bus_we = ((wr_state == WR_IDLE) && s_axi_awvalid && s_axi_wvalid) ||
-                    ((wr_state == WR_ADDR) && s_axi_awvalid) ||
-                    ((wr_state == WR_DATA) && s_axi_wvalid);
+    // Generate write enable pulse (only when actually writing)
+    logic bus_we_pulse;
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            bus_we_pulse <= 1'b0;
+        end else begin
+            bus_we_pulse <= ((wr_state == WR_IDLE) && s_axi_awvalid && s_axi_wvalid) ||
+                           ((wr_state == WR_ADDR) && s_axi_awvalid) ||
+                           ((wr_state == WR_DATA) && s_axi_wvalid);
+        end
+    end
     
-    assign bus_addr = (wr_state == WR_IDLE) ? s_axi_awaddr : wr_addr_reg;
+    assign bus_we = bus_we_pulse;
+    assign bus_addr = (s_axi_awvalid) ? s_axi_awaddr : wr_addr_reg;
     assign bus_wdata = s_axi_wdata;
     
+    // AXI read state machine
     typedef enum logic [1:0] {
         RD_IDLE,
         RD_WAIT,
@@ -152,18 +178,23 @@ module gpu_axi_wrapper #(
     rd_state_t rd_state, rd_next;
     logic [C_S_AXI_ADDR_WIDTH-1:0] rd_addr_reg;
     logic [C_S_AXI_DATA_WIDTH-1:0] rd_data_reg;
+    logic rd_en;
     
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             rd_state <= RD_IDLE;
             rd_addr_reg <= '0;
             rd_data_reg <= '0;
+            rd_en <= 1'b0;
         end else begin
             rd_state <= rd_next;
             if (s_axi_arvalid && s_axi_arready) begin
                 rd_addr_reg <= s_axi_araddr;
+                rd_en <= 1'b1;
+            end else begin
+                rd_en <= 1'b0;
             end
-            if (rd_state == RD_WAIT) begin
+            if (rd_en) begin
                 rd_data_reg <= bus_rdata;
             end
         end
@@ -189,7 +220,15 @@ module gpu_axi_wrapper #(
     assign s_axi_arready = (rd_state == RD_IDLE);
     assign s_axi_rvalid = (rd_state == RD_RESP);
     assign s_axi_rdata = rd_data_reg;
-    assign s_axi_rresp = 2'b00;
+    assign s_axi_rresp = 2'b00; // OKAY response
+    
+    // Use the registered read address for GPU reads
+    logic [C_S_AXI_ADDR_WIDTH-1:0] read_addr_to_gpu;
+    assign read_addr_to_gpu = (rd_en) ? rd_addr_reg : bus_addr;
+    
+    //==========================================================================
+    // GPU Top Instance
+    //==========================================================================
     
     gpu_top #(
         .DATA_WIDTH   (32),
@@ -206,16 +245,25 @@ module gpu_axi_wrapper #(
         .clk          (clk),
         .rst_n        (rst_n),
         
+        // CPU bus interface
         .i_bus_we     (bus_we),
-        .i_bus_addr   (bus_addr),
+        .i_bus_addr   (rd_en ? rd_addr_reg : bus_addr),
         .i_bus_wdata  (bus_wdata),
         .o_bus_rdata  (bus_rdata),
         
+        // Memory interface (will convert to AXI)
         .o_dram_we    (dram_we),
         .o_dram_addr  (dram_addr),
         .o_dram_wdata (dram_wdata),
         .i_dram_rdata (dram_rdata)
     );
+    
+    //==========================================================================
+    // Simple AXI4 Master for DDR Access
+    //==========================================================================
+    
+    // For simplicity, we'll do single-beat transfers
+    // In production, you'd want to implement burst transfers
     
     typedef enum logic [2:0] {
         M_IDLE,
@@ -241,12 +289,14 @@ module gpu_axi_wrapper #(
         end else begin
             m_state <= m_next;
             
-            if (m_state == M_IDLE && (dram_we || dram_valid)) begin
+            // Capture GPU memory request
+            if (m_state == M_IDLE && (dram_we || (!dram_we && dram_addr != '0))) begin
                 m_addr_reg <= dram_addr;
-                m_wdata_reg <= dram_wdata;
+                m_wdata_reg <= dram_we ? dram_wdata : '0;
                 m_we_reg <= dram_we;
             end
             
+            // Capture read data
             if (m_axi_rvalid && m_axi_rready) begin
                 dram_rdata <= m_axi_rdata;
             end
@@ -259,7 +309,7 @@ module gpu_axi_wrapper #(
             M_IDLE: begin
                 if (dram_we)
                     m_next = M_WRITE_ADDR;
-                else if (dram_valid && !dram_we)
+                else if (dram_addr != '0 && !dram_we)  // Read request detected
                     m_next = M_READ_ADDR;
             end
             M_WRITE_ADDR: begin
@@ -285,38 +335,43 @@ module gpu_axi_wrapper #(
         endcase
     end
     
+    // Write address channel
     assign m_axi_awid = '0;
     assign m_axi_awaddr = m_addr_reg;
-    assign m_axi_awlen = 8'h00;
-    assign m_axi_awsize = 3'b010;
-    assign m_axi_awburst = 2'b01;
+    assign m_axi_awlen = 8'h00; // Single beat
+    assign m_axi_awsize = 3'b010; // 4 bytes
+    assign m_axi_awburst = 2'b01; // INCR
     assign m_axi_awlock = 1'b0;
-    assign m_axi_awcache = 4'b0011;
+    assign m_axi_awcache = 4'b0011; // Normal non-cacheable bufferable
     assign m_axi_awprot = 3'b000;
     assign m_axi_awqos = 4'b0000;
     assign m_axi_awvalid = (m_state == M_WRITE_ADDR);
     
+    // Write data channel
     assign m_axi_wdata = m_wdata_reg;
-    assign m_axi_wstrb = 4'b1111;
-    assign m_axi_wlast = 1'b1;
+    assign m_axi_wstrb = 4'b1111; // All bytes valid
+    assign m_axi_wlast = 1'b1; // Single beat, always last
     assign m_axi_wvalid = (m_state == M_WRITE_DATA);
     
+    // Write response channel
     assign m_axi_bready = (m_state == M_WRITE_RESP);
     
+    // Read address channel
     assign m_axi_arid = '0;
     assign m_axi_araddr = m_addr_reg;
-    assign m_axi_arlen = 8'h00;
-    assign m_axi_arsize = 3'b010;
-    assign m_axi_arburst = 2'b01;
+    assign m_axi_arlen = 8'h00; // Single beat
+    assign m_axi_arsize = 3'b010; // 4 bytes
+    assign m_axi_arburst = 2'b01; // INCR
     assign m_axi_arlock = 1'b0;
     assign m_axi_arcache = 4'b0011;
     assign m_axi_arprot = 3'b000;
     assign m_axi_arqos = 4'b0000;
     assign m_axi_arvalid = (m_state == M_READ_ADDR);
     
+    // Read data channel
     assign m_axi_rready = (m_state == M_READ_DATA);
     
+    // Generate ready signal for GPU (remove dram_valid as it's not used consistently)
     assign dram_ready = (m_state == M_IDLE);
-    assign dram_valid = !dram_we && (dram_addr != '0);
     
 endmodule
