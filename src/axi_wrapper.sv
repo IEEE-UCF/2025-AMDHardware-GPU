@@ -279,6 +279,15 @@ module axi_wrapper #(
     logic [C_M_AXI_DATA_WIDTH-1:0] m_wdata_reg;
     logic m_we_reg;
     
+    // INITIALIZE ALL REGISTERS TO PREVENT X PROPAGATION
+    initial begin
+        m_state = M_IDLE;
+        m_addr_reg = '0;
+        m_wdata_reg = '0;
+        m_we_reg = '0;
+        dram_rdata = '0;
+    end
+    
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             m_state <= M_IDLE;
@@ -289,10 +298,19 @@ module axi_wrapper #(
         end else begin
             m_state <= m_next;
             
-            // Capture GPU memory request
+            // Capture GPU memory request WITH X PROTECTION
             if (m_state == M_IDLE && (dram_we || (!dram_we && dram_addr != '0))) begin
                 m_addr_reg <= dram_addr;
-                m_wdata_reg <= dram_we ? dram_wdata : '0;
+                // FIX: Check for X values and default to 0 if found
+                if (dram_we) begin
+                    if (^dram_wdata === 1'bx || ^dram_wdata === 1'bz) begin
+                        m_wdata_reg <= '0;  // Default to 0 if X/Z detected
+                    end else begin
+                        m_wdata_reg <= dram_wdata;
+                    end
+                end else begin
+                    m_wdata_reg <= '0;
+                end
                 m_we_reg <= dram_we;
             end
             
@@ -347,7 +365,6 @@ module axi_wrapper #(
     assign m_axi_awqos = 4'b0000;
     assign m_axi_awvalid = (m_state == M_WRITE_ADDR) ? 1'b1 : 1'b0;
     
-    // Write data channel - always drive valid values
     assign m_axi_wdata = (m_state == M_WRITE_DATA) ? m_wdata_reg : 32'h00000000;
     assign m_axi_wstrb = (m_state == M_WRITE_DATA) ? 4'b1111 : 4'b0000;
     assign m_axi_wlast = (m_state == M_WRITE_DATA) ? 1'b1 : 1'b0;
