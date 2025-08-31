@@ -335,9 +335,9 @@ module axi_wrapper #(
         endcase
     end
     
-    // Write address channel
-    assign m_axi_awid = '0;
-    assign m_axi_awaddr = m_addr_reg;
+    // Write address channel - always drive valid values
+    assign m_axi_awid = 4'h0;
+    assign m_axi_awaddr = (m_state == M_WRITE_ADDR) ? m_addr_reg : 32'h00000000;
     assign m_axi_awlen = 8'h00; // Single beat
     assign m_axi_awsize = 3'b010; // 4 bytes
     assign m_axi_awburst = 2'b01; // INCR
@@ -345,20 +345,20 @@ module axi_wrapper #(
     assign m_axi_awcache = 4'b0011; // Normal non-cacheable bufferable
     assign m_axi_awprot = 3'b000;
     assign m_axi_awqos = 4'b0000;
-    assign m_axi_awvalid = (m_state == M_WRITE_ADDR);
+    assign m_axi_awvalid = (m_state == M_WRITE_ADDR) ? 1'b1 : 1'b0;
     
-    // Write data channel
-    assign m_axi_wdata = m_wdata_reg;
-    assign m_axi_wstrb = 4'b1111; // All bytes valid
-    assign m_axi_wlast = 1'b1; // Single beat, always last
-    assign m_axi_wvalid = (m_state == M_WRITE_DATA);
+    // Write data channel - always drive valid values
+    assign m_axi_wdata = (m_state == M_WRITE_DATA) ? m_wdata_reg : 32'h00000000;
+    assign m_axi_wstrb = (m_state == M_WRITE_DATA) ? 4'b1111 : 4'b0000;
+    assign m_axi_wlast = (m_state == M_WRITE_DATA) ? 1'b1 : 1'b0;
+    assign m_axi_wvalid = (m_state == M_WRITE_DATA) ? 1'b1 : 1'b0;
     
     // Write response channel
     assign m_axi_bready = (m_state == M_WRITE_RESP);
     
-    // Read address channel
-    assign m_axi_arid = '0;
-    assign m_axi_araddr = m_addr_reg;
+    // Read address channel - always drive valid values
+    assign m_axi_arid = 4'h0;
+    assign m_axi_araddr = (m_state == M_READ_ADDR) ? m_addr_reg : 32'h00000000;
     assign m_axi_arlen = 8'h00; // Single beat
     assign m_axi_arsize = 3'b010; // 4 bytes
     assign m_axi_arburst = 2'b01; // INCR
@@ -366,7 +366,7 @@ module axi_wrapper #(
     assign m_axi_arcache = 4'b0011;
     assign m_axi_arprot = 3'b000;
     assign m_axi_arqos = 4'b0000;
-    assign m_axi_arvalid = (m_state == M_READ_ADDR);
+    assign m_axi_arvalid = (m_state == M_READ_ADDR) ? 1'b1 : 1'b0;
     
     // Read data channel
     assign m_axi_rready = (m_state == M_READ_DATA);
