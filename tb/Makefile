@@ -13,7 +13,7 @@ VERILOG_SOURCES += $(shell pwd)/../src/mmu.sv
 VERILOG_SOURCES += $(shell pwd)/../src/rasterizer.sv
 VERILOG_SOURCES += $(shell pwd)/../src/shader_core.sv
 VERILOG_SOURCES += $(shell pwd)/../src/shader_loader.sv
-VERILOG_SOURCES += $(shell pwd)/../src/spi_to_parallel_bridge.sv
+VERILOG_SOURCES += $(shell pwd)/../src/axi_wrapper.sv
 VERILOG_SOURCES += $(shell pwd)/../src/texture_unit.sv
 VERILOG_SOURCES += $(shell pwd)/../src/vertex_fetch.sv
 VERILOG_SOURCES += $(shell pwd)/../rtl_utils/reset_sync.sv
@@ -28,7 +28,7 @@ MODULE ?= alu_tb
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
-TESTBENCHES = alu:alu_tb attribute_interpolator:attribute_interpolator_tb controller:controller_tb fragment_shader:fragment_shader_tb framebuffer:framebuffer_tb gpu_register_file:gpu_reg_tb gpu_top:gpu_top_tb instruction_decoder:instr_decode_tb _interconnect:interconnect_tb mmu:mmu_tb rasterizer:rasterizer_tb shader_core:shader_core_tb shader_loader:shader_loader_tb spi_to_parallel_bridge:spi_tb texture_unit:tecture_tb vertex_fetch:vertex_tb
+TESTBENCHES = alu:alu_tb attribute_interpolator:attribute_interpolator_tb controller:controller_tb fragment_shader:fragment_shader_tb framebuffer:framebuffer_tb gpu_register_file:gpu_reg_tb gpu_top:gpu_top_tb instruction_decoder:instr_decode_tb _interconnect:interconnect_tb mmu:mmu_tb rasterizer:rasterizer_tb shader_core:shader_core_tb shader_loader:shader_loader_tb axi_wrapper:axi_wrapper_tb texture_unit:texture_tb vertex_fetch:vertex_tb
 
 .PHONY: all_tests
 all_tests:
@@ -106,9 +106,9 @@ shader_core:
 shader_loader:
 	$(MAKE) TOPLEVEL=shader_loader MODULE=shader_loader_tb SIM_BUILD=sim_build_shader_loader
 
-.PHONY: spi_to_parallel_bridge
-spi_to_parallel_bridge:
-	$(MAKE) TOPLEVEL=spi_to_parallel_bridge MODULE=spi_tb SIM_BUILD=sim_build_spi_to_parallel_bridge
+.PHONY: axi_wrapper
+axi_wrapper:
+	$(MAKE) TOPLEVEL=axi_wrapper MODULE=axi_wrapper_tb SIM_BUILD=sim_build_axi_wrapper
 
 .PHONY: texture_unit
 texture_unit:
