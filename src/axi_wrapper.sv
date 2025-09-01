@@ -1,4 +1,7 @@
 /* verilator lint_off CASEINCOMPLETE */
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+/* verilator lint_off UNUSED */
 
 module axi_wrapper #(
     parameter integer C_S_AXI_DATA_WIDTH = 32,

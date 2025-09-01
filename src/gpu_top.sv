@@ -21,14 +21,9 @@ module gpu_top #(
   input  logic                     i_bus_we,
   input  logic [ADDR_WIDTH-1:0]    i_bus_addr,
   input  logic [DATA_WIDTH-1:0]    i_bus_wdata,
-  output logic [DATA_WIDTH-1:0]    o_bus_rdata,
+  output logic [DATA_WIDTH-1:0]    o_bus_rdata
 
-  // Main memory (DRAM) interface
-  output logic                     o_dram_we,
-  output logic [ADDR_WIDTH-1:0]    o_dram_addr,
-  output logic [DATA_WIDTH-1:0]    o_dram_wdata,
-  input  logic [DATA_WIDTH-1:0]    i_dram_rdata
-);
+  );
 
   localparam int VERTEX_POS_BITS    = CORD_WIDTH * 2 * 3; // 3 vertices x,y
   localparam int VERTEX_COLOR_BITS  = DATA_WIDTH * 3;     // 3 colors
@@ -303,16 +298,24 @@ module gpu_top #(
     .o_slave_wdata  (slave_wdata),
     .i_slave_rdata  (slave_rdata)
   );
+
+  // BRAM (256K words = 1MB)
+  localparam int BRAM_DEPTH = 256 * 1024;  
+  logic [DATA_WIDTH-1:0] bram_memory [BRAM_DEPTH];
+  logic [DATA_WIDTH-1:0] bram_rdata;
   
-  logic [DATA_WIDTH-1:0] dram_rdata_delayed;
+  // BRAM read/write logic
   always_ff @(posedge clk) begin
-    dram_rdata_delayed <= i_dram_rdata;
+    if (slave_req[0]) begin  // Write when requested
+      if (slave_addr[0][17:0] < BRAM_DEPTH) begin  // Bounds check
+        bram_memory[slave_addr[0][17:0]] <= slave_wdata[0];
+      end
+    end
+    bram_rdata <= bram_memory[slave_addr[0][17:0]];  // Always read
   end
 
-  assign o_dram_we = slave_req[0];  // Your interconnect doesn't have separate we signal
-  assign o_dram_addr = slave_addr[0];
-  assign o_dram_wdata = slave_wdata[0];
-  assign slave_rdata[0] = i_dram_rdata;
+  // connect BRAM read data to interconnect
+  assign slave_rdata[0] = bram_rdata;
 
   vertex_fetch #(
     .ATTR_WIDTH       (32),

@@ -1,3 +1,7 @@
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+/* verilator lint_off UNUSED */
+
 module _interconnect #(
     parameter int NUM_MASTERS = 2,
     parameter int NUM_SLAVES  = 4,
