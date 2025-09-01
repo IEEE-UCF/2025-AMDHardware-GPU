@@ -29,7 +29,9 @@ module gpu_top #(
   localparam int VERTEX_POS_BITS    = CORD_WIDTH * 2 * 3; // 3 vertices x,y
   localparam int VERTEX_COLOR_BITS  = DATA_WIDTH * 3;     // 3 colors
   localparam int VERTEX_UV_BITS     = DATA_WIDTH * 2 * 3; // 3 UV pairs
-  localparam int VERTEX_TOTAL_BITS  = VERTEX_POS_BITS + VERTEX_COLOR_BITS + VERTEX_UV_BITS;
+  // Total bits for a vertex, padded to next 32-bit boundary for alignment
+  localparam int VERTEX_TOTAL_BITS_RAW = VERTEX_POS_BITS + VERTEX_COLOR_BITS + VERTEX_UV_BITS;
+  localparam int VERTEX_TOTAL_BITS = ((VERTEX_TOTAL_BITS_RAW + 31) / 32) * 32;
   localparam int FIFO_DATA_WIDTH    = (2 * CORD_WIDTH) + (3 * (2 * CORD_WIDTH + 1));
 
   // Memory map for CPU interface
