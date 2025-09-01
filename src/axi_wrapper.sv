@@ -1,3 +1,5 @@
+/* verilator lint_off CASEINCOMPLETE */
+
 module axi_wrapper #(
     parameter integer C_S_AXI_DATA_WIDTH = 32,
     parameter integer C_S_AXI_ADDR_WIDTH = 32,

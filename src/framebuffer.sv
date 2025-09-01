@@ -18,19 +18,19 @@ module framebuffer #(
 
     // output to the memory interconnect (as a master)
     output logic o_mem_req,
-    output logic [($clog2(SCREEN_WIDTH*SCREEN_HEIGHT)+7)/8*8-1:0] o_mem_addr, // Padded to the next byte size for alignment
+    output logic [$clog2(SCREEN_WIDTH*SCREEN_HEIGHT)-1:0] o_mem_addr,
     output logic [COLOR_WIDTH-1:0] o_mem_wdata
 );
 
   logic [$clog2(SCREEN_WIDTH*SCREEN_HEIGHT)-1:0] write_addr;
 
   // turning 2d screen coordinates into a 1d memory address
-  assign write_addr  = i_pixel_y * SCREEN_WIDTH + i_pixel_x;
+  assign write_addr = ($clog2(SCREEN_WIDTH*SCREEN_HEIGHT))'((i_pixel_y * SCREEN_WIDTH) + i_pixel_x);
 
   // drives the memory request bus directly
   // asserts a one-cycle request whenever a valid pixel arrives from the fragment shader
   assign o_mem_req   = i_pixel_we;
-  assign o_mem_addr = {write_addr, { ((($clog2(SCREEN_WIDTH*SCREEN_HEIGHT)+7)/8*8)-$clog2(SCREEN_WIDTH*SCREEN_HEIGHT)){1'b0} } }; // Pads this on the LSB to the next byte for alignment
+  assign o_mem_addr  = write_addr;
   assign o_mem_wdata = i_pixel_color;
 
 endmodule

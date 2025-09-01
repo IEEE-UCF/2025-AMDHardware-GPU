@@ -40,7 +40,7 @@ module _interconnect #(
             if (grants[i]) begin
                 granted_addr  = i_master_addr[i];
                 granted_wdata = i_master_wdata[i];
-                granted_index = i;
+                granted_index = i[$clog2(NUM_MASTERS)-1:0];
             end
         end
     end

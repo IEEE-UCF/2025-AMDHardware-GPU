@@ -1,3 +1,7 @@
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+/* verilator lint_off UNUSED */
+
 module fifo #(
     parameter int DATA_WIDTH = 32,
     parameter int DEPTH = 16

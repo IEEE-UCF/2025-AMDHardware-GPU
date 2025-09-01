@@ -1,3 +1,7 @@
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+/* verilator lint_off UNUSED */
+
 // attribute_interpolator.sv
 // uses barycentric weights to blend vertex attributes for a fragment.
 

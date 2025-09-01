@@ -1,3 +1,7 @@
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+/* verilator lint_off UNUSED */
+
 module gpu_top #(
   parameter int DATA_WIDTH   = 32,
   parameter int VEC_SIZE     = 4,

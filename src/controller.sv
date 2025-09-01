@@ -1,3 +1,7 @@
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+/* verilator lint_off UNUSED */
+
 module controller #(
     parameter int QUEUE_DEPTH = 16
 ) (

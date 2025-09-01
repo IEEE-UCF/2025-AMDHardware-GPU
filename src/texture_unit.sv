@@ -1,3 +1,7 @@
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+/* verilator lint_off UNUSED */
+
 module texture_unit #(
     parameter int TEX_WIDTH  = 256,
     parameter int TEX_HEIGHT = 256,
