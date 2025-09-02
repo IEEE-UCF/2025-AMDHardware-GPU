@@ -56,7 +56,7 @@ sudo apt-get install yosys
 
 ### Simulation & Testing
 
-To run the test benches, the makefile following format.
+To run the test benches, the makefile follows the following format.
 
 ```bash
 make [file] 
