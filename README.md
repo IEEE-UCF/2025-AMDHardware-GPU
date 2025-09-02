@@ -14,7 +14,7 @@
 
 # KnightGPU
 
-KnightGPU is a hardware accelerated 3D graphics processor for the Red Pitaya. For AOHW2025, we have implemented a complete rendering pipeline with vertex transformation, triangle rasterization, and texture mapping. The design features a custom shader core with SIMD vector operations, hardware barycentric interpolation for fragment attributes, and a tile-based rendering approach for efficient memory usage on FPGA resources.
+KnightGPU is a hardware accelerated 3D graphics processor for the Red Pitaya 125-14 version 1. For AOHW2025, we have implemented a complete rendering pipeline with vertex transformation, triangle rasterization, and texture mapping. The design features a custom shader core with SIMD vector operations, hardware barycentric interpolation for fragment attributes, and a tile-based rendering approach for efficient memory usage on FPGA resources.
 
 ## Directory Structure
 
@@ -65,9 +65,9 @@ To find the files needed for testing,
 ```bash
 make help
 ```
-will list all of them. 
+will list all available targets.
 
-This command will use CocoTB to test the testbenches, if comprehensive testing is needed, put
+This command will use CocoTB to test the testbenches. If comprehensive testing is needed, add:
 
 ```bash
 SIM=Verilator
